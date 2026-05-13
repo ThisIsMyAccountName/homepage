@@ -170,8 +170,9 @@ export function DailyGame({ onComplete }: DailyGameProps) {
       <div
         className="grid select-none border-2 border-foreground/60"
         style={{
-          gridTemplateColumns: "repeat(6, min(6vw, 40px))",
-          gridTemplateRows: "repeat(6, min(6vw, 40px))",
+          gridTemplateColumns: "repeat(6, minmax(0, 48px))",
+          gridTemplateRows: "repeat(6, minmax(0, 48px))",
+          width: "min(100%, 288px)",
         }}
       >
         {board.map((row, r) =>
@@ -209,13 +210,13 @@ export function DailyGame({ onComplete }: DailyGameProps) {
       </div>
 
       {/* Number pad */}
-      <div className="flex gap-1.5">
+      <div className="flex gap-2">
         {[1, 2, 3, 4, 5, 6].map((num) => (
           <button
             key={num}
             onClick={() => placeNumber(num)}
             disabled={won}
-            className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card font-mono text-sm font-bold text-foreground transition-colors hover:bg-card-hover hover:border-accent/40 active:bg-accent/20 disabled:opacity-50"
+            className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-card font-mono text-base font-bold text-foreground transition-colors hover:bg-card-hover hover:border-accent/40 active:bg-accent/20 disabled:opacity-50"
           >
             {num}
           </button>
@@ -223,7 +224,7 @@ export function DailyGame({ onComplete }: DailyGameProps) {
         <button
           onClick={() => placeNumber(null)}
           disabled={won}
-          className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-xs text-muted transition-colors hover:bg-card-hover disabled:opacity-50"
+          className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-card text-sm text-muted transition-colors hover:bg-card-hover disabled:opacity-50"
         >
           &times;
         </button>

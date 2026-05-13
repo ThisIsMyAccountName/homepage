@@ -16,8 +16,11 @@ type GameEntry =
 // Registry of available games - add new games here
 const gameRegistry: Record<string, GameEntry> = {
   "example-game": {
-    type: "canvas",
-    load: () => import("@/games/example-game"),
+    type: "component",
+    load: () =>
+      import("@/games/example-game/SandboxGame").then((mod) => ({
+        default: mod.SandboxGame as unknown as ComponentType,
+      })),
   },
   sudoku: {
     type: "component",

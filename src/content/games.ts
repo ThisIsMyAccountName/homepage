@@ -19,9 +19,9 @@ export const games: GameMeta[] = [
   },
   {
     slug: "example-game",
-    title: "Bouncing Ball",
-    description: "A simple bouncing ball demo. Click or tap to add more balls.",
+    title: "Physics Sandbox",
+    description: "A physics playground with gravity, ball-to-ball collisions, wall drawing, and adjustable parameters. Open the menu to tweak speed, size, gravity, and more.",
     thumbnail: "/images/placeholder.svg",
-    controls: "Click/Tap to add balls",
+    controls: "Click to spawn balls, drag to draw walls. Use the menu (top-left) to adjust physics.",
   },
 ];

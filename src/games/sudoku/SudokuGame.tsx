@@ -237,12 +237,9 @@ export function SudokuGame() {
   const isSelected = (r: number, c: number) =>
     selected !== null && selected[0] === r && selected[1] === c;
 
-  const cellSize =
-    size === 16
-      ? "min(1.6vw, 24px)"
-      : size === 9
-        ? "min(3vw, 36px)"
-        : "min(5vw, 44px)";
+  const cellMax =
+    size === 16 ? 28 : size === 9 ? 40 : 48;
+  const gridMax = cellMax * size;
   const fontSize =
     size === 16
       ? "text-[10px] sm:text-xs"
@@ -321,8 +318,9 @@ export function SudokuGame() {
           <div
             className="grid select-none border-2 border-foreground/60"
             style={{
-              gridTemplateColumns: `repeat(${size}, ${cellSize})`,
-              gridTemplateRows: `repeat(${size}, ${cellSize})`,
+              gridTemplateColumns: `repeat(${size}, minmax(0, ${cellMax}px))`,
+              gridTemplateRows: `repeat(${size}, minmax(0, ${cellMax}px))`,
+              width: `min(100%, ${gridMax}px)`,
             }}
           >
             {board.map((row, r) =>
