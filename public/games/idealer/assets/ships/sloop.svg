@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" role="img" aria-label="Sloop ship">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f1ece0"/>
+      <stop offset="100%" stop-color="#dfceb0"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#87afbe" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#3f667a" stop-opacity="0.76"/>
+    </linearGradient>
+    <linearGradient id="hull" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8f6736"/>
+      <stop offset="100%" stop-color="#60391d"/>
+    </linearGradient>
+    <linearGradient id="sail" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6f0df"/>
+      <stop offset="100%" stop-color="#d6c7a9"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="700" fill="url(#sky)"/>
+  <rect y="420" width="1200" height="280" fill="url(#water)"/>
+
+  <path d="M220 500 Q600 390 980 500 Q945 580 850 620 L350 620 Q255 580 220 500Z" fill="url(#hull)"/>
+  <rect x="510" y="220" width="18" height="290" rx="8" fill="#5a3a1f"/>
+  <rect x="680" y="255" width="15" height="240" rx="7" fill="#5a3a1f"/>
+  <path d="M528 230 L710 280 L610 470 L510 430 Z" fill="url(#sail)"/>
+  <path d="M695 265 L810 305 L750 455 L675 425 Z" fill="url(#sail)"/>
+
+  <path d="M880 560 L880 620" stroke="#4f3a25" stroke-width="7"/>
+  <circle cx="880" cy="550" r="12" fill="#4f3a25"/>
+  <path d="M570 510 Q500 560 540 625" fill="none" stroke="#7f5630" stroke-width="10" stroke-linecap="round"/>
+</svg>

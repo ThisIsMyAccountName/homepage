@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" role="img" aria-label="Raft ship">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f5efe1"/>
+      <stop offset="100%" stop-color="#ead7b8"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8eb2bd" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#4f7483" stop-opacity="0.72"/>
+    </linearGradient>
+    <linearGradient id="hull" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#9b6e3d"/>
+      <stop offset="100%" stop-color="#6e4524"/>
+    </linearGradient>
+    <linearGradient id="sail" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f4ead2"/>
+      <stop offset="100%" stop-color="#d8c6a0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="700" fill="url(#sky)"/>
+  <rect y="420" width="1200" height="280" fill="url(#water)"/>
+
+  <ellipse cx="600" cy="530" rx="350" ry="75" fill="#b58550" fill-opacity="0.2"/>
+  <path d="M270 500 Q600 430 930 500 Q905 555 830 585 L370 585 Q295 555 270 500Z" fill="url(#hull)"/>
+  <rect x="585" y="265" width="20" height="235" rx="8" fill="#6c4726"/>
+  <path d="M605 275 L720 315 L650 460 L575 430 Z" fill="url(#sail)"/>
+
+  <circle cx="860" cy="545" r="14" fill="#4f3a25"/>
+  <path d="M860 560 L860 610" stroke="#4f3a25" stroke-width="7"/>
+  <path d="M520 485 Q470 520 500 560" fill="none" stroke="#8f643a" stroke-width="9" stroke-linecap="round"/>
+</svg>
