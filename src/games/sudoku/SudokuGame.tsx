@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   generatePuzzle,
@@ -19,6 +19,11 @@ import {
   clearCompletedPuzzles,
   type CompletedPuzzle,
 } from "./history";
+import {
+  saveRegularSession,
+  loadRegularSession,
+  clearRegularSession,
+} from "./session";
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -68,10 +73,16 @@ export function SudokuGame() {
   const [errors, setErrors] = useState<[number, number][]>([]);
   const [timer, setTimer] = useState(0);
   const [running, setRunning] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [won, setWon] = useState(false);
   const [tab, setTab] = useState<Tab>("play");
   const [history, setHistory] = useState<CompletedPuzzle[]>([]);
   const [copied, setCopied] = useState(false);
+  // Pending size for a New Game confirmation. undefined = no prompt open.
+  // null = confirming reset with current size. number = confirming size switch.
+  const [pendingNewGame, setPendingNewGame] = useState<
+    GameSize | null | undefined
+  >(undefined);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initRef = useRef(false);
 
@@ -83,29 +94,77 @@ export function SudokuGame() {
 
     setHistory(getCompletedPuzzles());
 
-    const loaded = loadFromURL(searchParams.get("s"), searchParams.get("p"));
-    setGame(loaded ?? createGame(9));
+    const fromURL = loadFromURL(searchParams.get("s"), searchParams.get("p"));
+    if (fromURL) {
+      setGame(fromURL);
+      setRunning(true);
+      return;
+    }
+    const saved = loadRegularSession();
+    if (saved) {
+      const cfg = CONFIGS[saved.size];
+      if (cfg) {
+        setGame({
+          puzzle: saved.puzzle,
+          solution: saved.solution,
+          board: saved.board,
+          config: cfg,
+          size: saved.size as GameSize,
+        });
+        setTimer(saved.timer);
+        setRunning(true);
+        return;
+      }
+    }
+    setGame(createGame(9));
     setRunning(true);
   }, [searchParams]);
 
-  // New game
+  // Has the player made any moves on the current puzzle?
+  const hasProgress = useCallback((): boolean => {
+    if (!game || won) return false;
+    for (let r = 0; r < game.size; r++) {
+      for (let c = 0; c < game.size; c++) {
+        if (game.puzzle[r][c] === null && game.board[r][c] !== null) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [game, won]);
+
+  // New game (no confirmation — call requestNewGame for the prompt flow)
   const newGame = useCallback(
     (size?: GameSize) => {
       const s = size ?? game?.size ?? 9;
+      clearRegularSession();
       setGame(createGame(s));
       setSelected(null);
       setErrors([]);
       setTimer(0);
       setRunning(true);
+      setPaused(false);
       setWon(false);
       router.replace("/games/sudoku", { scroll: false });
     },
     [game?.size, router]
   );
 
+  // Request new game — prompts confirmation if there's unsaved progress.
+  const requestNewGame = useCallback(
+    (size?: GameSize) => {
+      if (hasProgress()) {
+        setPendingNewGame(size ?? null);
+      } else {
+        newGame(size);
+      }
+    },
+    [hasProgress, newGame]
+  );
+
   // Timer
   useEffect(() => {
-    if (running && game) {
+    if (running && !paused && !won && game) {
       intervalRef.current = setInterval(() => {
         setTimer((t) => t + 1);
       }, 1000);
@@ -113,12 +172,25 @@ export function SudokuGame() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [running, game]);
+  }, [running, paused, won, game]);
+
+  // Auto-save the in-progress puzzle so it survives reloads.
+  // Cleared on win / new game.
+  useEffect(() => {
+    if (!game || won) return;
+    saveRegularSession(
+      game.size,
+      game.puzzle,
+      game.solution,
+      game.board,
+      timer
+    );
+  }, [game, timer, won]);
 
   // Place number
   const placeNumber = useCallback(
     (num: number | null) => {
-      if (!game || !selected || won) return;
+      if (!game || !selected || won || paused) return;
       const [row, col] = selected;
       if (game.puzzle[row][col] !== null) return;
 
@@ -132,6 +204,7 @@ export function SudokuGame() {
         if (errs.length === 0) {
           setWon(true);
           setRunning(false);
+          clearRegularSession();
           const entry: CompletedPuzzle = {
             id: Date.now().toString(36),
             size: game.size,
@@ -144,7 +217,7 @@ export function SudokuGame() {
         }
       }
     },
-    [game, selected, won, timer]
+    [game, selected, won, paused, timer]
   );
 
   // Check
@@ -183,6 +256,7 @@ export function SudokuGame() {
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
+      if (paused) return;
       const { size, config } = game;
 
       if (size <= 9) {
@@ -218,7 +292,17 @@ export function SudokuGame() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [placeNumber, selected, game]);
+  }, [placeNumber, selected, game, paused]);
+
+  const digitCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const row of game?.board ?? []) {
+      for (const cell of row) {
+        if (cell !== null) counts[cell] = (counts[cell] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [game?.board]);
 
   // Loading state (server render + initial client frame)
   if (!game) {
@@ -291,7 +375,7 @@ export function SudokuGame() {
               {([6, 9, 16] as GameSize[]).map((s) => (
                 <button
                   key={s}
-                  onClick={() => newGame(s)}
+                  onClick={() => requestNewGame(s)}
                   className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
                     size === s
                       ? "bg-accent text-background"
@@ -308,20 +392,36 @@ export function SudokuGame() {
                   Solved!
                 </span>
               )}
+              <button
+                onClick={() => setPaused((p) => !p)}
+                disabled={won}
+                className="rounded border border-border bg-card px-2 py-1 text-xs font-mono text-muted transition-colors hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+                aria-label={paused ? "Resume" : "Pause"}
+              >
+                {paused ? "Resume" : "Pause"}
+              </button>
               <span className="font-mono text-sm text-muted">
                 {formatTime(timer)}
               </span>
             </div>
           </div>
 
-          {/* Grid */}
+          {/* Grid (with pause overlay) */}
           <div
-            className="grid select-none border-2 border-foreground/60"
+            className="relative"
+            style={{ width: `min(100%, ${gridMax}px)` }}
+          >
+          <div
+            className={`grid select-none border-2 border-foreground/60 transition-[filter] duration-200 ${
+              paused ? "blur-md pointer-events-none" : ""
+            }`}
             style={{
-              gridTemplateColumns: `repeat(${size}, minmax(0, ${cellMax}px))`,
-              gridTemplateRows: `repeat(${size}, minmax(0, ${cellMax}px))`,
-              width: `min(100%, ${gridMax}px)`,
+              gridTemplateColumns: `repeat(${size}, 1fr)`,
+              gridTemplateRows: `repeat(${size}, 1fr)`,
+              width: "100%",
+              aspectRatio: "1",
             }}
+            aria-hidden={paused}
           >
             {board.map((row, r) =>
               row.map((cell, c) => {
@@ -359,20 +459,42 @@ export function SudokuGame() {
               })
             )}
           </div>
+            {paused && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                <span className="text-sm font-medium text-foreground tracking-wide">
+                  Paused
+                </span>
+                <button
+                  onClick={() => setPaused(false)}
+                  className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-background transition-colors hover:bg-accent-hover"
+                >
+                  Resume
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Number pad */}
           <div className="flex flex-wrap justify-center gap-1.5 max-w-md">
-            {config.symbols.map((sym, i) => (
-              <button
-                key={sym}
-                onClick={() => placeNumber(i + 1)}
-                className={`flex items-center justify-center rounded-md border border-border bg-card font-mono font-bold text-foreground transition-colors hover:bg-card-hover hover:border-accent/40 active:bg-accent/20 ${
-                  size === 16 ? "h-8 w-8 text-[10px]" : "h-10 w-10 text-sm"
-                }`}
-              >
-                {sym}
-              </button>
-            ))}
+            {config.symbols.map((sym, i) => {
+              const full = (digitCounts[i + 1] ?? 0) >= size;
+              return (
+                <button
+                  key={sym}
+                  onClick={() => placeNumber(i + 1)}
+                  disabled={full}
+                  className={`flex items-center justify-center rounded-md border font-mono font-bold transition-colors ${
+                    size === 16 ? "h-8 w-8 text-[10px]" : "h-10 w-10 text-sm"
+                  } ${
+                    full
+                      ? "border-border bg-card text-muted/30 cursor-not-allowed"
+                      : "border-border bg-card text-foreground hover:bg-card-hover hover:border-accent/40 active:bg-accent/20"
+                  }`}
+                >
+                  {sym}
+                </button>
+              );
+            })}
             <button
               onClick={() => placeNumber(null)}
               className={`flex items-center justify-center rounded-md border border-border bg-card text-muted transition-colors hover:bg-card-hover hover:border-accent/40 active:bg-accent/20 ${
@@ -399,7 +521,7 @@ export function SudokuGame() {
               {copied ? "Copied!" : "Share"}
             </button>
             <button
-              onClick={() => newGame()}
+              onClick={() => requestNewGame()}
               className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-background transition-colors hover:bg-accent-hover"
             >
               New Game
@@ -419,8 +541,68 @@ export function SudokuGame() {
               ? "Keys: 1-9, A-G. Arrow keys to navigate. Backspace to clear."
               : `Keys: 1-${size}. Arrow keys to navigate. Backspace to clear.`}
           </p>
+
+          {pendingNewGame !== undefined && (
+            <ConfirmDialog
+              title="Start a new puzzle?"
+              message="Your current progress will be lost."
+              confirmLabel="New Game"
+              onConfirm={() => {
+                const target = pendingNewGame;
+                setPendingNewGame(undefined);
+                newGame(target ?? undefined);
+              }}
+              onCancel={() => setPendingNewGame(undefined)}
+            />
+          )}
         </>
       )}
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onCancel}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div
+        className="w-full max-w-xs rounded-md border border-border bg-card p-4 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        <p className="mt-1 text-xs text-muted">{message}</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="rounded-md border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-card-hover"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-accent-hover"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

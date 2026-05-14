@@ -9,6 +9,11 @@ import {
   CONFIGS,
   type Board,
 } from "@/games/sudoku/generator";
+import {
+  saveDailySession,
+  loadDailySession,
+  clearDailySession,
+} from "@/games/sudoku/session";
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -28,19 +33,31 @@ interface DailyGameProps {
 }
 
 export function DailyGame({ onComplete }: DailyGameProps) {
+  const todayKey = getTodayKey();
   const [game, setGame] = useState<{
     puzzle: Board;
     solution: Board;
     board: Board;
-  } | null>(generateDailyGame);
+  } | null>(() => {
+    const base = generateDailyGame();
+    const saved = loadDailySession(todayKey, 6);
+    if (saved) {
+      return { puzzle: base.puzzle, solution: base.solution, board: saved.board };
+    }
+    return base;
+  });
   const [selected, setSelected] = useState<[number, number] | null>(null);
   const [errors, setErrors] = useState<[number, number][]>([]);
-  const [errorCount, setErrorCount] = useState(0);
-  const [timer, setTimer] = useState(0);
+  const [errorCount, setErrorCount] = useState(
+    () => loadDailySession(todayKey, 6)?.errorCount ?? 0
+  );
+  const [timer, setTimer] = useState(
+    () => loadDailySession(todayKey, 6)?.timer ?? 0
+  );
   const [running, setRunning] = useState(true);
+  const [paused, setPaused] = useState(true);
   const [won, setWon] = useState(false);
   const [alreadyCompleted] = useState(() => {
-    const todayKey = getTodayKey();
     return localStorage.getItem(`daily-completed-${todayKey}`) === "1";
   });
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -49,7 +66,7 @@ export function DailyGame({ onComplete }: DailyGameProps) {
 
   // Timer
   useEffect(() => {
-    if (running && !won && !alreadyCompleted) {
+    if (running && !paused && !won && !alreadyCompleted) {
       intervalRef.current = setInterval(() => {
         setTimer((t) => t + 1);
       }, 1000);
@@ -57,12 +74,18 @@ export function DailyGame({ onComplete }: DailyGameProps) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [running, won, alreadyCompleted]);
+  }, [running, paused, won, alreadyCompleted]);
+
+  // Auto-save the in-progress daily puzzle
+  useEffect(() => {
+    if (!game || won || alreadyCompleted) return;
+    saveDailySession(todayKey, game.board, timer, errorCount);
+  }, [game, timer, errorCount, won, alreadyCompleted, todayKey]);
 
   // Place number
   const placeNumber = useCallback(
     (num: number | null) => {
-      if (!game || !selected || won || alreadyCompleted) return;
+      if (!game || !selected || won || alreadyCompleted || paused) return;
       const [row, col] = selected;
       if (game.puzzle[row][col] !== null) return;
 
@@ -77,8 +100,8 @@ export function DailyGame({ onComplete }: DailyGameProps) {
           setWon(true);
           setRunning(false);
           // Mark as completed today
-          const todayKey = getTodayKey();
           localStorage.setItem(`daily-completed-${todayKey}`, "1");
+          clearDailySession(todayKey);
           onComplete(timer, errorCount);
         } else {
           setErrors(errs);
@@ -86,7 +109,7 @@ export function DailyGame({ onComplete }: DailyGameProps) {
         }
       }
     },
-    [game, selected, won, alreadyCompleted, timer, errorCount, onComplete]
+    [game, selected, won, alreadyCompleted, paused, timer, errorCount, onComplete, todayKey]
   );
 
   // Check
@@ -104,6 +127,7 @@ export function DailyGame({ onComplete }: DailyGameProps) {
     if (!game) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
+      if (paused) return;
       const num = parseInt(e.key);
       if (num >= 1 && num <= 6) {
         placeNumber(num);
@@ -127,7 +151,7 @@ export function DailyGame({ onComplete }: DailyGameProps) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [placeNumber, selected, game]);
+  }, [placeNumber, selected, game, paused]);
 
   if (!game) {
     return (
@@ -164,16 +188,28 @@ export function DailyGame({ onComplete }: DailyGameProps) {
           <span className="text-xs text-red-400">{errorCount} errors</span>
         )}
         {won && <span className="text-sm font-medium text-accent">Solved!</span>}
+        {!won && (
+          <button
+            onClick={() => setPaused((p) => !p)}
+            className="rounded border border-border bg-card px-2 py-0.5 text-xs font-mono text-muted transition-colors hover:text-foreground"
+          >
+            {paused ? "Resume" : "Pause"}
+          </button>
+        )}
       </div>
 
-      {/* 6x6 Grid */}
+      {/* 6x6 Grid (with pause overlay) */}
+      <div className="relative" style={{ width: "min(100%, 288px)" }}>
       <div
-        className="grid select-none border-2 border-foreground/60"
+        className={`grid select-none border-2 border-foreground/60 transition-[filter] duration-200 ${
+          paused ? "blur-md pointer-events-none" : ""
+        }`}
         style={{
           gridTemplateColumns: "repeat(6, minmax(0, 48px))",
           gridTemplateRows: "repeat(6, minmax(0, 48px))",
-          width: "min(100%, 288px)",
+          width: "100%",
         }}
+        aria-hidden={paused}
       >
         {board.map((row, r) =>
           row.map((cell, c) => {
@@ -206,6 +242,20 @@ export function DailyGame({ onComplete }: DailyGameProps) {
               </button>
             );
           })
+        )}
+      </div>
+        {paused && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            <span className="text-sm font-medium text-foreground tracking-wide">
+              Paused
+            </span>
+            <button
+              onClick={() => setPaused(false)}
+              className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-background transition-colors hover:bg-accent-hover"
+            >
+              Resume
+            </button>
+          </div>
         )}
       </div>
 

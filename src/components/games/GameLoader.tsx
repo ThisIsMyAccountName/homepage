@@ -29,6 +29,13 @@ const gameRegistry: Record<string, GameEntry> = {
         default: mod.SudokuGame as unknown as ComponentType,
       })),
   },
+  nonogram: {
+    type: "component",
+    load: () =>
+      import("@/games/nonogram").then((mod) => ({
+        default: mod.NonogramGame as unknown as ComponentType,
+      })),
+  },
   idealer: {
     type: "iframe",
     src: "/games/idealer/index.html",

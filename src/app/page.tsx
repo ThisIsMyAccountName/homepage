@@ -22,6 +22,21 @@ const DailyGame = dynamic(
   }
 );
 
+const DailyNonogram = dynamic(
+  () =>
+    import("@/games/daily/DailyNonogram").then((m) => ({
+      default: m.DailyNonogram,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center p-8 text-sm text-muted">
+        Loading daily puzzle...
+      </div>
+    ),
+  }
+);
+
 interface LeaderboardEntry {
   name: string;
   time: number;
@@ -47,27 +62,8 @@ export default function HomePage() {
         </p>
       </div>
 
-      {/* Daily Game + Leaderboard */}
-      <section className="mb-12">
-        <h2 className="text-lg font-semibold mb-4 text-center">
-          Daily Puzzle
-          <span className="ml-2 text-xs text-muted font-normal">6x6 Sudoku</span>
-        </h2>
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Game */}
-          <div className="rounded-lg border border-border bg-card p-4">
-            <DailyGameSection />
-          </div>
-
-          {/* Leaderboard */}
-          <div className="rounded-lg border border-border bg-card p-4">
-            <h3 className="text-sm font-medium text-muted mb-3">
-              Today&apos;s Leaderboard
-            </h3>
-            <LeaderboardSection />
-          </div>
-        </div>
-      </section>
+      {/* Daily Puzzles */}
+      <DailySection />
 
       {/* Section links — buffed up */}
       <nav className="grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-2">
@@ -241,6 +237,60 @@ function SectionCardLinks() {
   );
 }
 
+/* --- Daily Section with tabs --- */
+
+const DAILY_TABS = [
+  { key: "sudoku", label: "Sudoku", sub: "6×6" },
+  { key: "nonogram", label: "Nonogram", sub: "7×7" },
+] as const;
+type DailyTab = (typeof DAILY_TABS)[number]["key"];
+
+function DailySection() {
+  const [active, setActive] = useState<DailyTab>("sudoku");
+
+  return (
+    <section className="mb-12">
+      <div className="flex items-center justify-center gap-1 mb-4">
+        {DAILY_TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setActive(t.key)}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+              active === t.key
+                ? "bg-accent text-background"
+                : "text-muted hover:text-foreground"
+            }`}
+          >
+            {t.label}
+            <span
+              className={`ml-1.5 font-mono text-[11px] ${
+                active === t.key ? "text-background/70" : "text-muted/60"
+              }`}
+            >
+              {t.sub}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-lg border border-border bg-card p-4">
+          {active === "sudoku" ? <DailyGameSection /> : <DailyNonogramSection />}
+        </div>
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="text-sm font-medium text-muted mb-3">
+            Today&apos;s Leaderboard
+          </h3>
+          {active === "sudoku" ? (
+            <LeaderboardSection />
+          ) : (
+            <NonogramLeaderboardSection />
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* --- Daily Game + Submit --- */
 
 function DailyGameSection() {
@@ -377,6 +427,201 @@ function LeaderboardSection() {
   useEffect(() => {
     const interval = setInterval(() => {
       fetch("/api/leaderboard")
+        .then((r) => r.json())
+        .then((data) => setEntries(data.entries || []))
+        .catch(() => {});
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) {
+    return <p className="text-xs text-muted">Loading...</p>;
+  }
+
+  if (entries.length === 0) {
+    return (
+      <p className="text-xs text-muted text-center py-4">
+        No scores yet today. Be the first!
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      {entries.map((entry, i) => (
+        <div
+          key={`${entry.name}-${entry.time}-${i}`}
+          className="flex items-center gap-2 rounded-md px-2 py-1.5"
+        >
+          <span
+            className={`w-5 text-xs font-bold ${
+              i === 0
+                ? "text-accent"
+                : i === 1
+                  ? "text-foreground"
+                  : "text-muted"
+            }`}
+          >
+            {i + 1}.
+          </span>
+          <span className="flex-1 text-sm text-foreground truncate">
+            {entry.name}
+          </span>
+          <span className="font-mono text-xs text-foreground">
+            {formatTime(entry.time)}
+          </span>
+          {entry.errors > 0 && (
+            <span className="text-[10px] text-red-400">
+              +{entry.errors}err
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* --- Daily Nonogram + Nonogram Leaderboard --- */
+
+function DailyNonogramSection() {
+  const [completed, setCompleted] = useState(false);
+  const [completionData, setCompletionData] = useState<{
+    time: number;
+    errors: number;
+  } | null>(null);
+
+  const handleComplete = useCallback((time: number, errors: number) => {
+    setCompleted(true);
+    setCompletionData({ time, errors });
+  }, []);
+
+  return (
+    <div>
+      <DailyNonogram onComplete={handleComplete} />
+      {completed && completionData && (
+        <SubmitNonogramScore
+          time={completionData.time}
+          errors={completionData.errors}
+        />
+      )}
+    </div>
+  );
+}
+
+function SubmitNonogramScore({
+  time,
+  errors,
+}: {
+  time: number;
+  errors: number;
+}) {
+  const [name, setName] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [easterEgg, setEasterEgg] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || submitted) return;
+
+    const { exploitDetected } = sanitizeName(name);
+    if (exploitDetected) {
+      setEasterEgg(
+        "Nice try! Your hacking skills are impressive, but maybe use them on CTFs instead?"
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/nonogram-leaderboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), time, errors }),
+      });
+
+      const data = await res.json();
+
+      if (data.easterEgg) {
+        setEasterEgg(data.error);
+        setSubmitting(false);
+        return;
+      }
+
+      if (!res.ok) {
+        setError(data.error || "Submission failed");
+        setSubmitting(false);
+        return;
+      }
+
+      setSubmitted(true);
+    } catch {
+      setError("Network error. Try again.");
+    }
+    setSubmitting(false);
+  };
+
+  if (easterEgg) {
+    return (
+      <div className="mt-4 rounded-md border border-accent/40 bg-accent/5 p-3 text-center">
+        <p className="text-xs text-accent font-mono">{easterEgg}</p>
+        <p className="text-[10px] text-muted mt-1">
+          Your attempt has been logged. Better luck next time.
+        </p>
+      </div>
+    );
+  }
+
+  if (submitted) {
+    return (
+      <p className="mt-4 text-center text-sm text-accent">
+        Score submitted! Check the leaderboard.
+      </p>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Your name"
+        maxLength={20}
+        className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
+      />
+      <button
+        type="submit"
+        disabled={!name.trim() || submitting}
+        className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-background transition-colors hover:bg-accent-hover disabled:opacity-50"
+      >
+        {submitting ? "..." : "Submit"}
+      </button>
+      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+    </form>
+  );
+}
+
+function NonogramLeaderboardSection() {
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/nonogram-leaderboard")
+      .then((r) => r.json())
+      .then((data) => {
+        setEntries(data.entries || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch("/api/nonogram-leaderboard")
         .then((r) => r.json())
         .then((data) => setEntries(data.entries || []))
         .catch(() => {});

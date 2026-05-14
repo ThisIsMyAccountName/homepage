@@ -24,4 +24,11 @@ export const games: GameMeta[] = [
     thumbnail: "/images/placeholder.svg",
     controls: "Click to spawn balls, drag to draw walls. Use the menu (top-left) to adjust physics.",
   },
+  {
+    slug: "nonogram",
+    title: "Nonogram",
+    description: "Fill cells to reveal a hidden pixel picture. Clue numbers on each row and column tell you the groups of consecutive filled cells. Available in 5×5, 7×7, and 10×10.",
+    thumbnail: "/images/placeholder.svg",
+    controls: "Left click to fill, right click to mark empty. Arrow keys to navigate, Space to fill, X to mark.",
+  },
 ];
