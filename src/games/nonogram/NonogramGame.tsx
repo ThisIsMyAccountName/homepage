@@ -83,6 +83,7 @@ export function NonogramGame() {
   const [won, setWon] = useState(false);
   const [copied, setCopied] = useState(false);
   const [pendingNewSizeIdx, setPendingNewSizeIdx] = useState<number | null>(null);
+  const [pendingReset, setPendingReset] = useState(false);
   const [history, setHistory] = useState<CompletedNonogram[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -117,6 +118,18 @@ export function NonogramGame() {
       setHistory(getCompletedNonograms());
     }
   }, [tab]);
+
+  const resetPuzzle = useCallback((resetTimer: boolean) => {
+    clearSession();
+    setGame((g) => ({
+      ...g,
+      grid: emptyGrid(g.puzzle.rows, g.puzzle.cols),
+      ...(resetTimer ? { timer: 0 } : {}),
+    }));
+    setErrors(new Set());
+    setErrorCount(0);
+    setWon(false);
+  }, []);
 
   const startNewGame = useCallback(
     (sizeIdx: number) => {
@@ -435,6 +448,15 @@ export function NonogramGame() {
                 {copied ? "Copied!" : "Share result"}
               </button>
             )}
+            {!won && (
+              <button
+                onClick={() => setPendingReset(true)}
+                disabled={!game.grid.some((row) => row.some((c) => c !== "empty"))}
+                className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-card-hover hover:border-accent/40 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Reset
+              </button>
+            )}
             <button
               onClick={() => requestNewGame(sizeIdx)}
               className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-background transition-colors hover:bg-accent-hover"
@@ -442,6 +464,18 @@ export function NonogramGame() {
               New Game
             </button>
           </div>
+
+          {pendingReset && (
+            <ConfirmDialog
+              title="Reset puzzle?"
+              message="Clear your progress on the current puzzle."
+              confirmLabel="Yes"
+              secondaryConfirmLabel="Yes + Timer"
+              onConfirm={() => { setPendingReset(false); resetPuzzle(false); }}
+              onSecondaryConfirm={() => { setPendingReset(false); resetPuzzle(true); }}
+              onCancel={() => setPendingReset(false)}
+            />
+          )}
 
           {pendingNewSizeIdx !== null && (
             <ConfirmDialog

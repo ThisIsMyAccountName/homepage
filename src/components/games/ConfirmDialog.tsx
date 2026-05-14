@@ -4,7 +4,10 @@ interface ConfirmDialogProps {
   title: string;
   message: string;
   confirmLabel?: string;
+  /** Optional third action shown to the right of the primary confirm. */
+  secondaryConfirmLabel?: string;
   onConfirm: () => void;
+  onSecondaryConfirm?: () => void;
   onCancel: () => void;
 }
 
@@ -12,7 +15,9 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel = "Confirm",
+  secondaryConfirmLabel,
   onConfirm,
+  onSecondaryConfirm,
   onCancel,
 }: ConfirmDialogProps) {
   return (
@@ -42,6 +47,14 @@ export function ConfirmDialog({
           >
             {confirmLabel}
           </button>
+          {secondaryConfirmLabel && onSecondaryConfirm && (
+            <button
+              onClick={onSecondaryConfirm}
+              className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-accent-hover"
+            >
+              {secondaryConfirmLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>

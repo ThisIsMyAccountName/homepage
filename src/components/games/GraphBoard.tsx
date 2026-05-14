@@ -144,18 +144,18 @@ export function GraphBoard({
 
         {graph.nodes.map((node) => {
           const colorIdx = nodeColors?.[node.id] ?? null;
+          const isSelected = selectedNode === node.id;
           const fill =
             colorIdx !== null && colorIdx !== undefined && palette[colorIdx]
               ? palette[colorIdx]
+              : isSelected
+              ? "#6b7280"
               : "var(--color-card, #141414)";
-          const isSelected = selectedNode === node.id;
           const isGiven = givenNodes?.has(node.id) ?? false;
           const isUnique = uniqueNodes?.has(node.id) ?? false;
           const isUniqueBroken = uniqueViolators?.has(node.id) ?? false;
-          const stroke = isSelected
-            ? "var(--color-accent, #10b981)"
-            : "var(--color-foreground, #ededed)";
-          const strokeWidth = isSelected ? 0.012 : isGiven ? 0.01 : 0.006;
+          const stroke = "var(--color-foreground, #ededed)";
+          const strokeWidth = isGiven ? 0.01 : 0.006;
           return (
             <g key={`${idPrefix}-node-${node.id}`}>
               <circle

@@ -86,6 +86,7 @@ export function SudokuGame() {
   const [pendingNewGame, setPendingNewGame] = useState<
     GameSize | null | undefined
   >(undefined);
+  const [pendingReset, setPendingReset] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initRef = useRef(false);
 
@@ -135,6 +136,21 @@ export function SudokuGame() {
     }
     return false;
   }, [game, won]);
+
+  const resetPuzzle = useCallback(
+    (resetTimer: boolean) => {
+      if (!game) return;
+      clearRegularSession();
+      setGame((g) => (g ? { ...g, board: g.puzzle.map((r) => [...r]) } : g));
+      setSelected(null);
+      setErrors([]);
+      if (resetTimer) setTimer(0);
+      setRunning(true);
+      setPaused(false);
+      setWon(false);
+    },
+    [game]
+  );
 
   // New game (no confirmation — call requestNewGame for the prompt flow)
   const newGame = useCallback(
@@ -510,6 +526,13 @@ export function SudokuGame() {
               {copied ? "Copied!" : "Share"}
             </button>
             <button
+              onClick={() => setPendingReset(true)}
+              disabled={won || !hasProgress()}
+              className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-card-hover hover:border-accent/40 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Reset
+            </button>
+            <button
               onClick={() => requestNewGame()}
               className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-background transition-colors hover:bg-accent-hover"
             >
@@ -530,6 +553,18 @@ export function SudokuGame() {
               ? "Keys: 1-9, A-G. Arrow keys to navigate. Backspace to clear."
               : `Keys: 1-${size}. Arrow keys to navigate. Backspace to clear.`}
           </p>
+
+          {pendingReset && (
+            <ConfirmDialog
+              title="Reset puzzle?"
+              message="Clear your progress on the current puzzle."
+              confirmLabel="Yes"
+              secondaryConfirmLabel="Yes + Timer"
+              onConfirm={() => { setPendingReset(false); resetPuzzle(false); }}
+              onSecondaryConfirm={() => { setPendingReset(false); resetPuzzle(true); }}
+              onCancel={() => setPendingReset(false)}
+            />
+          )}
 
           {pendingNewGame !== undefined && (
             <ConfirmDialog

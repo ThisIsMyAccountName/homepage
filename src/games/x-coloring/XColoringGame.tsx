@@ -86,6 +86,7 @@ export function XColoringGame() {
   const [pendingNew, setPendingNew] = useState<DifficultyKey | null | undefined>(
     undefined
   );
+  const [pendingReset, setPendingReset] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initRef = useRef(false);
 
@@ -132,14 +133,14 @@ export function XColoringGame() {
     return game.coloring.some((c, i) => c !== -1 && !(i in game.puzzle.givens));
   }, [game, won]);
 
-  const restartCurrentPuzzle = useCallback(() => {
+  const resetPuzzle = useCallback((resetTimer: boolean) => {
     if (!game) return;
     clearRegularSession();
     const coloring = applyGivens(game.puzzle, emptyColoring(game.puzzle.graph.nodes.length));
     setGame({ puzzle: game.puzzle, coloring });
     setSelected(null);
     setShownConflicts({ edges: new Set(), uniqueViolators: new Set(), forbiddenPairViolators: new Set() });
-    setTimer(0);
+    if (resetTimer) setTimer(0);
     setRunning(true);
     setPaused(false);
     setWon(false);
@@ -238,9 +239,8 @@ export function XColoringGame() {
     (nodeId: number) => {
       if (!game || won || paused) return;
       setSelected(nodeId);
-      applyColor(nodeId, brush);
     },
-    [game, won, paused, brush, applyColor]
+    [game, won, paused]
   );
 
   const checkBoard = useCallback(() => {
@@ -280,7 +280,9 @@ export function XColoringGame() {
       const colors = game.puzzle.colors;
       const num = parseInt(e.key, 10);
       if (Number.isFinite(num) && num >= 1 && num <= colors) {
-        setBrush(num - 1);
+        const idx = num - 1;
+        setBrush(idx);
+        if (selected !== null) applyColor(selected, idx);
         return;
       }
       if (e.key === "Backspace" || e.key === "Delete") {
@@ -431,7 +433,10 @@ export function XColoringGame() {
               return (
                 <button
                   key={i}
-                  onClick={() => setBrush(i)}
+                  onClick={() => {
+                    setBrush(i);
+                    if (selected !== null) applyColor(selected, i);
+                  }}
                   className={`flex h-10 w-10 items-center justify-center rounded-md border-2 font-mono text-xs font-bold transition-colors ${
                     active
                       ? "border-foreground"
@@ -473,7 +478,7 @@ export function XColoringGame() {
                 </span>
                 {puzzle.chromaticNumber !== undefined && colorsUsed > puzzle.chromaticNumber && (
                   <button
-                    onClick={restartCurrentPuzzle}
+                    onClick={() => resetPuzzle(false)}
                     className="ml-2 text-xs text-accent hover:underline"
                   >
                     Try with {puzzle.chromaticNumber}
@@ -516,6 +521,13 @@ export function XColoringGame() {
               {copied ? "Copied!" : "Share"}
             </button>
             <button
+              onClick={() => setPendingReset(true)}
+              disabled={won || !hasProgress()}
+              className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-card-hover hover:border-accent/40 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Reset
+            </button>
+            <button
               onClick={() => requestNewGame()}
               className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-background transition-colors hover:bg-accent-hover"
             >
@@ -537,8 +549,20 @@ export function XColoringGame() {
             {givenNodes.size > 0 && (
               <li><span className="text-foreground">Bold nodes</span> are pre-colored and locked</li>
             )}
-            <li className="opacity-60">Keys 1–{puzzle.colors} to pick color · Backspace to clear</li>
+            <li className="opacity-60">Select a node, then click a color or press 1–{puzzle.colors} · Backspace to clear</li>
           </ul>
+
+          {pendingReset && (
+            <ConfirmDialog
+              title="Reset puzzle?"
+              message="Clear your progress on the current puzzle."
+              confirmLabel="Yes"
+              secondaryConfirmLabel="Yes + Timer"
+              onConfirm={() => { setPendingReset(false); resetPuzzle(false); }}
+              onSecondaryConfirm={() => { setPendingReset(false); resetPuzzle(true); }}
+              onCancel={() => setPendingReset(false)}
+            />
+          )}
 
           {pendingNew !== undefined && (
             <ConfirmDialog
