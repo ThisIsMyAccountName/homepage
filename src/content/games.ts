@@ -31,4 +31,11 @@ export const games: GameMeta[] = [
     thumbnail: "/images/placeholder.svg",
     controls: "Left click to fill, right click to mark empty. Arrow keys to navigate, Space to fill, X to mark.",
   },
+  {
+    slug: "x-coloring",
+    title: "X Coloring",
+    description: "Color the graph so no two connected nodes share a color.",
+    thumbnail: "/images/placeholder.svg",
+    controls: "Pick a color, click nodes to paint. Number keys 1-4 select a color. Backspace clears the selected node.",
+  },
 ];

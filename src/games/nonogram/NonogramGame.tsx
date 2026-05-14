@@ -13,7 +13,10 @@ import {
   type NonogramPuzzle,
 } from "./generator";
 import { saveSession, loadSession, clearSession } from "./session";
-import { logCompletion, getCompletedNonograms, type CompletedNonogram } from "./history";
+import { logCompletion, getCompletedNonograms, clearCompletedNonograms, type CompletedNonogram } from "./history";
+import { GameTabs } from "@/components/games/GameTabs";
+import { GameHistory, type HistoryEntry } from "@/components/games/GameHistory";
+import { ConfirmDialog } from "@/components/games/ConfirmDialog";
 
 const SIZES: { rows: number; cols: number; label: string; cellSize: number }[] =
   [
@@ -34,23 +37,6 @@ function buildShareText(puzzle: NonogramPuzzle, time: number, errors: number): s
     .join("\n");
   const errStr = errors > 0 ? ` · ${errors} errors` : "";
   return `Nonogram ${puzzle.rows}×${puzzle.cols}\n${rows}\n⏱ ${formatTime(time)}${errStr}`;
-}
-
-function ShareButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      onClick={() => {
-        navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-        });
-      }}
-      className="rounded-md border border-border bg-card px-3 py-1.5 text-xs text-muted transition-colors hover:text-foreground hover:border-accent/40"
-    >
-      {copied ? "Copied!" : "Share result"}
-    </button>
-  );
 }
 
 interface GameState {
@@ -95,7 +81,8 @@ export function NonogramGame() {
   const [selected, setSelected] = useState<[number, number] | null>(null);
   const [mode, setMode] = useState<"fill" | "mark">("fill");
   const [won, setWon] = useState(false);
-  const [confirmingNew, setConfirmingNew] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [pendingNewSizeIdx, setPendingNewSizeIdx] = useState<number | null>(null);
   const [history, setHistory] = useState<CompletedNonogram[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -140,7 +127,6 @@ export function NonogramGame() {
       setErrorCount(0);
       setSelected(null);
       setWon(false);
-      setConfirmingNew(false);
     },
     []
   );
@@ -151,7 +137,7 @@ export function NonogramGame() {
         row.some((c) => c !== "empty")
       );
       if (hasProgress && !won) {
-        setConfirmingNew(true);
+        setPendingNewSizeIdx(sizeIdx);
       } else {
         startNewGame(sizeIdx);
       }
@@ -197,6 +183,13 @@ export function NonogramGame() {
     if (errs.length > 0) setErrorCount((n) => n + errs.length);
   }, [game.grid, game.puzzle.solution]);
 
+  const shareResult = useCallback(() => {
+    navigator.clipboard.writeText(buildShareText(game.puzzle, game.timer, errorCount)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [game.puzzle, game.timer, errorCount]);
+
   // Keyboard
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -240,86 +233,66 @@ export function NonogramGame() {
   const rowClueW = maxRowClueLen * 18 + 8;
   const colClueH = maxColClueLen * 14 + 6;
 
+  const historyEntries: HistoryEntry[] = history.map((e) => ({
+    id: e.id,
+    label: `${e.rows}×${e.cols}`,
+    timeLabel: formatTime(e.time),
+    dateLabel:
+      e.puzzleDate ??
+      new Date(e.date).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      }),
+    badge: e.errors > 0 ? `+${e.errors}err` : undefined,
+  }));
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col items-center gap-4 p-4 sm:p-6">
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-border">
-        {(["play", "history"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-3 pb-2 text-sm capitalize transition-colors ${
-              tab === t
-                ? "border-b-2 border-accent text-foreground -mb-px"
-                : "text-muted hover:text-foreground"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <GameTabs
+        tabs={["play", "history"]}
+        active={tab}
+        onChange={(t) => setTab(t as "play" | "history")}
+        className="max-w-md"
+      />
 
       {tab === "history" && (
-        <HistoryTab history={history} />
+        <GameHistory
+          entries={historyEntries}
+          onClear={() => { clearCompletedNonograms(); setHistory([]); }}
+        />
       )}
 
       {tab === "play" && (
-        <div className="flex flex-col items-center gap-3">
-          {/* Size selector + New Game */}
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1 rounded-md border border-border bg-card p-0.5 text-xs font-mono">
+        <>
+          {/* Controls bar */}
+          <div className="flex w-full max-w-md items-center justify-between">
+            <div className="flex gap-1">
               {SIZES.map((s, i) => (
                 <button
                   key={s.label}
                   onClick={() => requestNewGame(i)}
-                  className={`rounded px-2 py-1 transition-colors ${
+                  className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
                     sizeIdx === i
-                      ? "bg-accent/20 text-accent"
-                      : "text-muted hover:text-foreground"
+                      ? "bg-accent text-background"
+                      : "bg-card border border-border text-muted hover:text-foreground"
                   }`}
                 >
                   {s.label}
                 </button>
               ))}
             </div>
-            <button
-              onClick={() => requestNewGame(sizeIdx)}
-              className="rounded border border-border bg-card px-2 py-1 text-xs text-muted transition-colors hover:text-foreground hover:border-accent/40"
-            >
-              New
-            </button>
-          </div>
-
-          {/* Confirm new game */}
-          {confirmingNew && (
-            <div className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted">
-              <span>Abandon current puzzle?</span>
-              <button
-                onClick={() => startNewGame(sizeIdx)}
-                className="text-red-400 hover:text-red-300 transition-colors font-medium"
-              >
-                Confirm
-              </button>
-              <button
-                onClick={() => setConfirmingNew(false)}
-                className="hover:text-foreground transition-colors"
-              >
-                Cancel
-              </button>
+            <div className="flex items-center gap-3">
+              {won && (
+                <span className="text-sm font-medium text-accent">Solved!</span>
+              )}
+              {errorCount > 0 && (
+                <span className="text-xs text-red-400">{errorCount} errors</span>
+              )}
+              <span className="font-mono text-sm text-muted">
+                {formatTime(timer)}
+              </span>
             </div>
-          )}
-
-          {/* Status */}
-          <div className="flex items-center gap-4">
-            <span className="font-mono text-sm text-muted">
-              {formatTime(timer)}
-            </span>
-            {errorCount > 0 && (
-              <span className="text-xs text-red-400">{errorCount} errors</span>
-            )}
-            {won && (
-              <span className="text-sm font-medium text-accent">Solved!</span>
-            )}
           </div>
 
           {/* Mode toggle */}
@@ -368,7 +341,7 @@ export function NonogramGame() {
                           satisfied ? "text-foreground/25" : "text-muted"
                         }`}
                       >
-                        {n === 0 ? " " : n}
+                        {n === 0 ? " " : n}
                       </span>
                     ))}
                   </div>
@@ -392,7 +365,7 @@ export function NonogramGame() {
                           satisfied ? "text-foreground/25" : "text-muted"
                         }`}
                       >
-                        {n === 0 ? " " : n}
+                        {n === 0 ? " " : n}
                       </span>
                     ))}
                   </div>
@@ -444,62 +417,47 @@ export function NonogramGame() {
             })}
           </div>
 
-          {/* Bottom actions */}
-          <div className="flex items-center gap-4">
+          {/* Actions */}
+          <div className="flex flex-wrap justify-center gap-2">
             {!won && (
               <button
                 onClick={checkBoard}
-                className="text-xs text-muted hover:text-foreground transition-colors"
+                className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-card-hover hover:border-accent/40"
               >
-                Check for errors
+                Check
               </button>
             )}
             {won && (
-              <ShareButton
-                text={buildShareText(puzzle, timer, errorCount)}
-              />
+              <button
+                onClick={shareResult}
+                className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-card-hover hover:border-accent/40"
+              >
+                {copied ? "Copied!" : "Share result"}
+              </button>
             )}
+            <button
+              onClick={() => requestNewGame(sizeIdx)}
+              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-background transition-colors hover:bg-accent-hover"
+            >
+              New Game
+            </button>
           </div>
-        </div>
+
+          {pendingNewSizeIdx !== null && (
+            <ConfirmDialog
+              title="Start a new puzzle?"
+              message="Your current progress will be lost."
+              confirmLabel="New Game"
+              onConfirm={() => {
+                const target = pendingNewSizeIdx;
+                setPendingNewSizeIdx(null);
+                startNewGame(target);
+              }}
+              onCancel={() => setPendingNewSizeIdx(null)}
+            />
+          )}
+        </>
       )}
     </div>
   );
 }
-
-function HistoryTab({ history }: { history: CompletedNonogram[] }) {
-  if (history.length === 0) {
-    return (
-      <p className="text-center text-sm text-muted py-6">
-        No completed puzzles yet.
-      </p>
-    );
-  }
-  return (
-    <div className="space-y-1.5 max-h-96 overflow-y-auto">
-      {history.map((entry) => (
-        <div
-          key={entry.id}
-          className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2"
-        >
-          <span className="font-mono text-xs text-muted">
-            {entry.rows}×{entry.cols}
-          </span>
-          <span className="flex-1 font-mono text-sm text-foreground">
-            {formatTime(entry.time)}
-          </span>
-          {entry.errors > 0 && (
-            <span className="text-xs text-red-400">+{entry.errors}err</span>
-          )}
-          <span className="text-xs text-muted">
-            {entry.puzzleDate ??
-              new Date(entry.date).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-              })}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-

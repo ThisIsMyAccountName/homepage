@@ -24,6 +24,9 @@ import {
   loadRegularSession,
   clearRegularSession,
 } from "./session";
+import { GameTabs } from "@/components/games/GameTabs";
+import { GameHistory, type HistoryEntry } from "@/components/games/GameHistory";
+import { ConfirmDialog } from "@/components/games/ConfirmDialog";
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -334,38 +337,24 @@ export function SudokuGame() {
   return (
     <div className="flex flex-col items-center gap-4 p-4 sm:p-6">
       {/* Tabs */}
-      <div className="flex gap-4 border-b border-border w-full max-w-md">
-        <button
-          onClick={() => setTab("play")}
-          className={`pb-2 text-sm font-medium transition-colors ${
-            tab === "play"
-              ? "text-accent border-b-2 border-accent"
-              : "text-muted hover:text-foreground"
-          }`}
-        >
-          Play
-        </button>
-        <button
-          onClick={() => setTab("history")}
-          className={`pb-2 text-sm font-medium transition-colors ${
-            tab === "history"
-              ? "text-accent border-b-2 border-accent"
-              : "text-muted hover:text-foreground"
-          }`}
-        >
-          History
-        </button>
-      </div>
+      <GameTabs
+        tabs={["play", "history"]}
+        active={tab}
+        onChange={(t) => setTab(t as Tab)}
+        className="max-w-md"
+      />
 
       {tab === "history" ? (
-        <HistoryTab
-          history={history}
+        <GameHistory
+          entries={history.map((e) => ({
+            id: e.id,
+            label: `${e.size}×${e.size}`,
+            timeLabel: formatTime(e.time),
+            dateLabel: new Date(e.date).toLocaleDateString(),
+            onShare: e.puzzleEncoded ? () => shareFromHistory(e) : undefined,
+          } satisfies HistoryEntry))}
+          onClear={() => { clearCompletedPuzzles(); setHistory([]); }}
           copied={copied}
-          onClear={() => {
-            clearCompletedPuzzles();
-            setHistory([]);
-          }}
-          onShare={shareFromHistory}
         />
       ) : (
         <>
@@ -555,123 +544,10 @@ export function SudokuGame() {
               onCancel={() => setPendingNewGame(undefined)}
             />
           )}
+
         </>
       )}
     </div>
   );
 }
 
-function ConfirmDialog({
-  title,
-  message,
-  confirmLabel,
-  onConfirm,
-  onCancel,
-}: {
-  title: string;
-  message: string;
-  confirmLabel: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onCancel}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-    >
-      <div
-        className="w-full max-w-xs rounded-md border border-border bg-card p-4 shadow-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-sm font-medium text-foreground">{title}</h3>
-        <p className="mt-1 text-xs text-muted">{message}</p>
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            className="rounded-md border border-border bg-card px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-card-hover"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-accent-hover"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// --- History Tab ---
-
-function HistoryTab({
-  history,
-  copied,
-  onClear,
-  onShare,
-}: {
-  history: CompletedPuzzle[];
-  copied: boolean;
-  onClear: () => void;
-  onShare: (entry: CompletedPuzzle) => void;
-}) {
-  if (history.length === 0) {
-    return (
-      <div className="py-8 text-center text-sm text-muted">
-        No completed puzzles yet. Solve one to see it here.
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full max-w-md space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-muted">
-          {history.length} puzzle{history.length !== 1 ? "s" : ""} completed
-        </span>
-        <button
-          onClick={onClear}
-          className="text-xs text-muted hover:text-red-400 transition-colors"
-        >
-          Clear history
-        </button>
-      </div>
-      <div className="space-y-1.5 max-h-80 overflow-y-auto">
-        {history.map((entry) => (
-          <div
-            key={entry.id}
-            className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2"
-          >
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-xs text-accent">
-                {entry.size}x{entry.size}
-              </span>
-              <span className="font-mono text-sm text-foreground">
-                {formatTime(entry.time)}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              {entry.puzzleEncoded && (
-                <button
-                  onClick={() => onShare(entry)}
-                  className="text-xs text-muted hover:text-accent transition-colors"
-                  title="Copy share link"
-                >
-                  {copied ? "Copied!" : "Share"}
-                </button>
-              )}
-              <span className="text-xs text-muted">
-                {new Date(entry.date).toLocaleDateString()}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}

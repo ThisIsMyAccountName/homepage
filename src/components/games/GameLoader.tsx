@@ -36,6 +36,13 @@ const gameRegistry: Record<string, GameEntry> = {
         default: mod.NonogramGame as unknown as ComponentType,
       })),
   },
+  "x-coloring": {
+    type: "component",
+    load: () =>
+      import("@/games/x-coloring").then((mod) => ({
+        default: mod.XColoringGame as unknown as ComponentType,
+      })),
+  },
   idealer: {
     type: "iframe",
     src: "/games/idealer/index.html",

@@ -11,9 +11,9 @@ interface LeaderboardEntry {
   timestamp: number;
 }
 
-interface LeaderboardData {
-  [dateKey: string]: LeaderboardEntry[];
-}
+/** Post-migration schema is nested by game; legacy schema is a flat array. */
+type DailyBucket = LeaderboardEntry[] | Record<string, LeaderboardEntry[]>;
+type LeaderboardData = Record<string, DailyBucket>;
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const LEADERBOARD_FILE = path.join(DATA_DIR, "leaderboard.json");
@@ -27,32 +27,39 @@ async function readLeaderboard(): Promise<LeaderboardData> {
   }
 }
 
+function entriesForDay(bucket: DailyBucket | undefined): number {
+  if (!bucket) return 0;
+  if (Array.isArray(bucket)) return bucket.length;
+  return Object.values(bucket).reduce(
+    (sum, list) => sum + (Array.isArray(list) ? list.length : 0),
+    0
+  );
+}
+
 export async function GET() {
   const data = await readLeaderboard();
 
-  // Compute daily completion counts for last 30 days
   const dailyCounts: { date: string; completions: number }[] = [];
   const today = new Date();
-  let totalCompletions = 0;
+  let totalLast30 = 0;
 
   for (let i = 0; i < 30; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     const key = getTodayKey(d);
-    const count = data[key]?.length ?? 0;
-    totalCompletions += count;
+    const count = entriesForDay(data[key]);
+    totalLast30 += count;
     dailyCounts.push({ date: key, completions: count });
   }
 
-  // Also count all-time completions
   const allTimeTotal = Object.values(data).reduce(
-    (sum, entries) => sum + entries.length,
+    (sum, bucket) => sum + entriesForDay(bucket),
     0
   );
 
   return NextResponse.json({
     totalCompletions: allTimeTotal,
-    last30Days: totalCompletions,
+    last30Days: totalLast30,
     daily: dailyCounts,
   });
 }

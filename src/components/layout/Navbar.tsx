@@ -2,12 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { navigation } from "@/lib/config";
 
 export function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleEnter = (href: string) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setOpenKey(href), 250);
+  };
+
+  const handleLeave = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setOpenKey(null);
+  };
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-sm">
@@ -23,17 +35,56 @@ export function Navbar() {
         {/* Desktop nav */}
         <ul className="hidden md:flex items-center gap-6">
           {navigation.map((item) => (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                className={`text-sm transition-colors ${
-                  pathname === item.href
-                    ? "text-accent font-medium"
-                    : "text-muted hover:text-foreground"
-                }`}
-              >
-                {item.label}
-              </Link>
+            <li key={item.href} className="relative">
+              {item.children ? (
+                <div
+                  onMouseEnter={() => handleEnter(item.href)}
+                  onMouseLeave={handleLeave}
+                >
+                  <Link
+                    href={item.href}
+                    className={`text-sm transition-colors ${
+                      pathname.startsWith(item.href) && item.href !== "/"
+                        ? "text-accent font-medium"
+                        : "text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                  {openKey === item.href && (
+                    <div className="absolute right-0 top-full pt-2">
+                      <ul className="min-w-[160px] rounded-lg border border-border bg-card py-1 shadow-lg">
+                        {item.children.map((child) => (
+                          <li key={child.href}>
+                            <Link
+                              href={child.href}
+                              onClick={handleLeave}
+                              className={`block px-3 py-1.5 text-sm transition-colors ${
+                                pathname === child.href
+                                  ? "text-accent"
+                                  : "text-muted hover:text-foreground hover:bg-card-hover"
+                              }`}
+                            >
+                              {child.label}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Link
+                  href={item.href}
+                  className={`text-sm transition-colors ${
+                    pathname === item.href
+                      ? "text-accent font-medium"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              )}
             </li>
           ))}
         </ul>
@@ -80,6 +131,25 @@ export function Navbar() {
                 >
                   {item.label}
                 </Link>
+                {item.children && (
+                  <ul className="ml-3 mt-1 flex flex-col gap-1">
+                    {item.children.map((child) => (
+                      <li key={child.href}>
+                        <Link
+                          href={child.href}
+                          onClick={() => setMobileOpen(false)}
+                          className={`block py-1.5 text-sm transition-colors ${
+                            pathname === child.href
+                              ? "text-accent"
+                              : "text-muted hover:text-foreground"
+                          }`}
+                        >
+                          {child.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>
