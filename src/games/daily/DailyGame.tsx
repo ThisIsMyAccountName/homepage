@@ -259,14 +259,14 @@ export function DailyGame({ onComplete }: DailyGameProps) {
         )}
       </div>
 
-      {/* Number pad */}
-      <div className="flex gap-2">
+      {/* Number pad — matches grid width, buttons scale to fill */}
+      <div className="flex gap-1.5 w-full" style={{ maxWidth: "min(100%, 288px)" }}>
         {[1, 2, 3, 4, 5, 6].map((num) => (
           <button
             key={num}
             onClick={() => placeNumber(num)}
             disabled={won}
-            className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-card font-mono text-base font-bold text-foreground transition-colors hover:bg-card-hover hover:border-accent/40 active:bg-accent/20 disabled:opacity-50"
+            className="flex flex-1 min-w-0 h-9 items-center justify-center rounded-md border border-border bg-card font-mono text-sm font-bold text-foreground transition-colors hover:bg-card-hover hover:border-accent/40 active:bg-accent/20 disabled:opacity-50"
           >
             {num}
           </button>
@@ -274,7 +274,7 @@ export function DailyGame({ onComplete }: DailyGameProps) {
         <button
           onClick={() => placeNumber(null)}
           disabled={won}
-          className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-card text-sm text-muted transition-colors hover:bg-card-hover disabled:opacity-50"
+          className="flex flex-1 min-w-0 h-9 items-center justify-center rounded-md border border-border bg-card text-sm text-muted transition-colors hover:bg-card-hover disabled:opacity-50"
         >
           &times;
         </button>

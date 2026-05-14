@@ -21,7 +21,8 @@ import { logCompletion } from "@/games/nonogram/history";
 
 const ROWS = 7;
 const COLS = 7;
-const CELL_SIZE = 36;
+const MAX_CELL = 36;
+const MIN_CELL = 24;
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -92,6 +93,17 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
       localStorage.getItem(`daily-nonogram-completed-${todayKey}`) === "1"
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const puzzleRef = useRef<HTMLDivElement>(null);
+  const [availableW, setAvailableW] = useState(0);
+
+  useEffect(() => {
+    const el = puzzleRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(() => setAvailableW(el.getBoundingClientRect().width));
+    obs.observe(el);
+    setAvailableW(el.getBoundingClientRect().width);
+    return () => obs.disconnect();
+  }, []);
 
   // Timer
   useEffect(() => {
@@ -219,6 +231,10 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
   const maxColClueLen = Math.max(...colClues.map((c) => c.length));
   const rowClueW = maxRowClueLen * 18 + 8;
   const colClueH = maxColClueLen * 14 + 6;
+  const cellSize =
+    availableW > 0
+      ? Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor((availableW - rowClueW) / COLS)))
+      : MAX_CELL;
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -270,7 +286,7 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
       )}
 
       {/* Puzzle */}
-      <div className="relative select-none">
+      <div ref={puzzleRef} className="relative select-none w-full">
         {/* Column clues */}
         <div
           className={`flex transition-[filter] duration-200 ${paused ? "blur-md" : ""}`}
@@ -283,7 +299,7 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
               <div
                 key={c}
                 className="flex flex-col items-center justify-end pb-0.5"
-                style={{ width: CELL_SIZE, height: colClueH }}
+                style={{ width: cellSize, height: colClueH }}
               >
                 {clue.map((n, i) => (
                   <span
@@ -314,7 +330,7 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
                 {/* Row clue */}
                 <div
                   className="flex items-center justify-end gap-1 pr-2"
-                  style={{ width: rowClueW, height: CELL_SIZE }}
+                  style={{ width: rowClueW, height: cellSize }}
                 >
                   {rowClues[r].map((n, i) => (
                     <span
@@ -335,7 +351,7 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
                   return (
                     <button
                       key={c}
-                      style={{ width: CELL_SIZE, height: CELL_SIZE }}
+                      style={{ width: cellSize, height: cellSize }}
                       onClick={() => handleCellClick(r, c)}
                       onContextMenu={(e) => handleCellRightClick(e, r, c)}
                       className={[
