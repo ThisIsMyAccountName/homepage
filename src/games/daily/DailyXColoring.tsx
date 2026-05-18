@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { getDailySeed, getTodayKey } from "@/lib/daily";
 import { conflicts as computeConflicts } from "@/lib/graph";
 import { generatePuzzle } from "@/games/x-coloring/generator";
@@ -26,6 +26,18 @@ function emptyColoring(n: number): number[] {
   return new Array<number>(n).fill(-1);
 }
 
+/** Overlay locked given nodes onto a coloring array. */
+function applyGivens(
+  givens: Record<number, number>,
+  coloring: number[]
+): number[] {
+  const next = [...coloring];
+  for (const [idStr, colorIdx] of Object.entries(givens)) {
+    next[parseInt(idStr)] = colorIdx;
+  }
+  return next;
+}
+
 interface DailyXColoringProps {
   onComplete: (time: number, errors: number) => void;
 }
@@ -36,11 +48,14 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
     generatePuzzle(DAILY_DIFFICULTY, getDailySeed())
   );
   const initial = loadDailySession(todayKey);
-  const initialColoring =
+  const baseColoring =
     initial?.coloring && initial.coloring.length === puzzle.graph.nodes.length
       ? initial.coloring
       : emptyColoring(puzzle.graph.nodes.length);
-  const [coloring, setColoring] = useState<number[]>(initialColoring);
+  // Re-apply givens defensively (session may predate the locked-node feature).
+  const [coloring, setColoring] = useState<number[]>(() =>
+    applyGivens(puzzle.givens, baseColoring)
+  );
   const [timer, setTimer] = useState(initial?.timer ?? 0);
   const [errorCount, setErrorCount] = useState(initial?.errorCount ?? 0);
   const [shownConflicts, setShownConflicts] = useState<{
@@ -59,6 +74,11 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
       localStorage.getItem(`${COMPLETED_KEY}${todayKey}`) === "1"
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const givenNodes = useMemo(
+    () => new Set(Object.keys(puzzle.givens).map(Number)),
+    [puzzle.givens]
+  );
 
   // Timer
   useEffect(() => {
@@ -79,6 +99,8 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
   const applyColor = useCallback(
     (nodeId: number, colorIdx: number | null) => {
       if (won || alreadyCompleted || paused) return;
+      // Given nodes are locked — ignore attempts to recolor or clear them.
+      if (nodeId in puzzle.givens) return;
       const next = [...coloring];
       next[nodeId] = colorIdx === null ? -1 : colorIdx;
       setColoring(next);
@@ -201,6 +223,9 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
             palette={puzzle.palette}
             selectedNode={selected}
             conflicts={shownConflicts.edges}
+            forbiddenPairs={puzzle.forbiddenPairs}
+            forbiddenPairViolators={shownConflicts.forbiddenPairViolators}
+            givenNodes={givenNodes}
             uniqueNodes={new Set(puzzle.uniqueNeighbourNodes)}
             uniqueViolators={shownConflicts.uniqueViolators}
             onNodeClick={onNodeClick}
@@ -265,6 +290,43 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
           >
             Check for errors
           </button>
+        )}
+        {!won && (
+          <div className="group relative">
+            <button
+              type="button"
+              aria-label="Show rules"
+              className="text-xs text-muted transition-colors hover:text-foreground focus:outline-none focus-visible:text-foreground"
+            >
+              Rules
+            </button>
+            <div
+              role="tooltip"
+              className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-60 -translate-x-1/2 rounded-md border border-border bg-card p-3 text-left opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+            >
+              <ul className="list-inside list-disc space-y-1 text-xs text-muted">
+                <li>No two connected nodes may share a color</li>
+                {puzzle.uniqueNeighbourNodes.length > 0 && (
+                  <li>
+                    <span className="text-foreground">Ringed nodes:</span> all
+                    neighbors need distinct colors
+                  </li>
+                )}
+                {puzzle.forbiddenPairs.length > 0 && (
+                  <li>
+                    <span className="text-amber-400">Dashed lines:</span> those
+                    nodes can&apos;t share a color
+                  </li>
+                )}
+                {givenNodes.size > 0 && (
+                  <li>
+                    <span className="text-foreground">Bold nodes</span> are
+                    pre-colored and locked
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
         )}
       </div>
     </div>
