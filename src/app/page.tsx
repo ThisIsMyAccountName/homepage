@@ -253,6 +253,12 @@ type DailyTab = (typeof DAILY_TABS)[number]["key"];
 
 function DailySection() {
   const [active, setActive] = useState<DailyTab>("sudoku");
+  // Bumped whenever a score is submitted so the leaderboard refetches at once.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const handleScoreSubmitted = useCallback(
+    () => setRefreshKey((k) => k + 1),
+    []
+  );
 
   return (
     <section className="mb-12">
@@ -292,15 +298,21 @@ function DailySection() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-lg border border-border bg-card p-4">
-            {active === "sudoku" && <DailyGameSection />}
-            {active === "nonogram" && <DailyNonogramSection />}
-            {active === "x-coloring" && <DailyXColoringSection />}
+            {active === "sudoku" && (
+              <DailyGameSection onScoreSubmitted={handleScoreSubmitted} />
+            )}
+            {active === "nonogram" && (
+              <DailyNonogramSection onScoreSubmitted={handleScoreSubmitted} />
+            )}
+            {active === "x-coloring" && (
+              <DailyXColoringSection onScoreSubmitted={handleScoreSubmitted} />
+            )}
           </div>
           <div className="rounded-lg border border-border bg-card p-4">
             <h3 className="text-sm font-medium text-muted mb-3">
               Today&apos;s Leaderboard
             </h3>
-            <LeaderboardSection game={active} />
+            <LeaderboardSection game={active} refreshKey={refreshKey} />
           </div>
         </div>
       )}
@@ -308,7 +320,11 @@ function DailySection() {
   );
 }
 
-function DailyGameSection() {
+function DailyGameSection({
+  onScoreSubmitted,
+}: {
+  onScoreSubmitted: () => void;
+}) {
   const [completed, setCompleted] = useState(false);
   const [completionData, setCompletionData] = useState<{
     time: number;
@@ -328,13 +344,18 @@ function DailyGameSection() {
           game="sudoku"
           time={completionData.time}
           errors={completionData.errors}
+          onSubmitted={onScoreSubmitted}
         />
       )}
     </div>
   );
 }
 
-function DailyNonogramSection() {
+function DailyNonogramSection({
+  onScoreSubmitted,
+}: {
+  onScoreSubmitted: () => void;
+}) {
   const [completed, setCompleted] = useState(false);
   const [completionData, setCompletionData] = useState<{
     time: number;
@@ -354,13 +375,18 @@ function DailyNonogramSection() {
           game="nonogram"
           time={completionData.time}
           errors={completionData.errors}
+          onSubmitted={onScoreSubmitted}
         />
       )}
     </div>
   );
 }
 
-function DailyXColoringSection() {
+function DailyXColoringSection({
+  onScoreSubmitted,
+}: {
+  onScoreSubmitted: () => void;
+}) {
   const [completed, setCompleted] = useState(false);
   const [completionData, setCompletionData] = useState<{
     time: number;
@@ -380,6 +406,7 @@ function DailyXColoringSection() {
           game="x-coloring"
           time={completionData.time}
           errors={completionData.errors}
+          onSubmitted={onScoreSubmitted}
         />
       )}
     </div>

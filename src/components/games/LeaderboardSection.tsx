@@ -16,6 +16,8 @@ interface LeaderboardSectionProps {
   game?: GameId;
   /** Poll interval in ms; default 30s. Set 0 to disable polling. */
   pollMs?: number;
+  /** Bump this to force an immediate refetch (e.g. right after a score submit). */
+  refreshKey?: number;
 }
 
 const GAME_LABEL: Record<GameId, string> = {
@@ -33,6 +35,7 @@ function formatTime(seconds: number): string {
 export function LeaderboardSection({
   game,
   pollMs = 30_000,
+  refreshKey = 0,
 }: LeaderboardSectionProps) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +70,7 @@ export function LeaderboardSection({
     return () => {
       cancelled = true;
     };
-  }, [game, pollMs]);
+  }, [game, pollMs, refreshKey]);
 
   if (loading) {
     return <p className="text-xs text-muted">Loading...</p>;
