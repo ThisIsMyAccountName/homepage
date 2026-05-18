@@ -9,6 +9,25 @@ RUN npm ci --omit=dev
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# git is needed at build time: `npm run build` runs the prebuild hook, which
+# clones the Dimensional Alchemy game into public/games/idealer (it is not
+# committed to this repo). Build requires network access to GitHub.
+RUN apk add --no-cache git
+
+ARG NEXT_PUBLIC_SITE_NAME
+ARG NEXT_PUBLIC_SITE_TITLE
+ARG NEXT_PUBLIC_SITE_DESCRIPTION
+ARG NEXT_PUBLIC_GITHUB_USER
+ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_REDDIT_READER_URL
+
+ENV NEXT_PUBLIC_SITE_NAME=$NEXT_PUBLIC_SITE_NAME
+ENV NEXT_PUBLIC_SITE_TITLE=$NEXT_PUBLIC_SITE_TITLE
+ENV NEXT_PUBLIC_SITE_DESCRIPTION=$NEXT_PUBLIC_SITE_DESCRIPTION
+ENV NEXT_PUBLIC_GITHUB_USER=$NEXT_PUBLIC_GITHUB_USER
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+ENV NEXT_PUBLIC_REDDIT_READER_URL=$NEXT_PUBLIC_REDDIT_READER_URL
+
 COPY package.json package-lock.json ./
 RUN npm ci
 

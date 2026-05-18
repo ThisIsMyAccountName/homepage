@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "IDEALER_AUTO=1 bash scripts/sync-idealer.sh",
     "dev": "next dev",
+    "prebuild": "IDEALER_AUTO=1 bash scripts/sync-idealer.sh",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync:idealer": "bash scripts/sync-idealer.sh"
   },
   "dependencies": {
     "next": "16.2.6",

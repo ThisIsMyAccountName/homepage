@@ -46,3 +46,7 @@ next-env.d.ts
 # AI knowledge & planning (local only, not for version control)
 /ai_docs
 /plan
+
+# Dimensional Alchemy game — lives in its own repo, pulled at build time
+# via scripts/sync-idealer.sh (npm prebuild/predev hook). Do not commit.
+/public/games/idealer
