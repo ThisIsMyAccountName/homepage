@@ -38,4 +38,11 @@ export const games: GameMeta[] = [
     thumbnail: "/images/placeholder.svg",
     controls: "Pick a color, click nodes to paint. Number keys 1-4 select a color. Backspace clears the selected node.",
   },
+  {
+    slug: "flow",
+    title: "Flow",
+    description: "Push flow from S to T along augmenting paths. Once an edge carries flow, you can traverse it backwards to cancel. Win when no s→t path remains.",
+    thumbnail: "/images/placeholder.svg",
+    controls: "Click a sequence of nodes from S to T, then press Push to commit the bottleneck. Clear path, Undo, and Reset are available.",
+  },
 ];

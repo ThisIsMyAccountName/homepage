@@ -1,5 +1,12 @@
 import { Project } from "@/lib/types";
 
+const GITHUB_USER = process.env.NEXT_PUBLIC_GITHUB_USER ?? "your-github-username";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://example.com";
+const REDDIT_READER_URL =
+  process.env.NEXT_PUBLIC_REDDIT_READER_URL ?? "https://r.example.com";
+
+const gh = (repo: string) => `https://github.com/${GITHUB_USER}/${repo}`;
+
 export const projects: Project[] = [
   {
     slug: "reddit-reader",
@@ -8,10 +15,10 @@ export const projects: Project[] = [
       "A custom web app to browse Reddit using the public JSON API. Features Flask backend, AJAX settings, CSRF-protected forms, subreddit/post/comment viewing, and user profile pages.",
     tags: ["Python", "Flask", "Reddit API", "WTForms"],
     images: ["/images/reddit-reader.png"],
-    embed: "https://r.siand.net",
+    embed: REDDIT_READER_URL,
     links: {
-      github: "https://github.com/ThisIsMyAccountName/reddit-Reader",
-      live: "https://r.siand.net",
+      github: gh("reddit-Reader"),
+      live: REDDIT_READER_URL,
     },
   },
   {
@@ -22,8 +29,8 @@ export const projects: Project[] = [
     tags: ["Next.js", "TypeScript", "Tailwind CSS", "Docker"],
     images: ["/images/placeholder.svg"],
     links: {
-      github: "https://github.com/ThisIsMyAccountName/homepage",
-      live: "https://siand.net",
+      github: gh("homepage"),
+      live: SITE_URL,
     },
   },
   {
@@ -35,7 +42,7 @@ export const projects: Project[] = [
     images: ["/games/idealer/assets/icons/currencies/matter.png"],
     playUrl: "/games/idealer",
     links: {
-      github: "https://github.com/ThisIsMyAccountName/Idealer",
+      github: gh("Idealer"),
     },
   },
 ];

@@ -1,9 +1,10 @@
 import { NavItem } from "./types";
 
 export const siteConfig = {
-  name: "Simon Andersen",
-  title: "Homepage",
-  description: "My projects, games, and links.",
+  name: process.env.NEXT_PUBLIC_SITE_NAME ?? "Your Name",
+  title: process.env.NEXT_PUBLIC_SITE_TITLE ?? "Homepage",
+  description:
+    process.env.NEXT_PUBLIC_SITE_DESCRIPTION ?? "My projects, games, and links.",
 };
 
 export const navigation: NavItem[] = [

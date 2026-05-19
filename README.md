@@ -1,37 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Homepage
 
-## Getting Started
+Personal homepage built with Next.js 16, React 19, Tailwind v4, and TypeScript.
+Features a project showcase, mini-games (daily Sudoku, Nonogram, X-Coloring, physics sandbox, etc.), file hosting, external links, and traffic analytics. Dark minimalist design, dockerised, no database (mutable data lives as JSON in `data/`).
 
-First, run the development server:
+## Configuration
+
+Personal info (your name, GitHub username, site URLs, etc.) is read from environment variables so it can stay out of this repo.
+
+1. Copy the template:
+   ```bash
+   cp .env.example .env.local
+   ```
+2. Edit `.env.local` and fill in your values:
+
+   | Variable | Used for |
+   |----------|----------|
+   | `NEXT_PUBLIC_SITE_NAME` | Name on the lander hero, e.g. `Simon Andersen` |
+   | `NEXT_PUBLIC_SITE_TITLE` | `<title>` tag and tab title |
+   | `NEXT_PUBLIC_SITE_DESCRIPTION` | Hero subtitle and `<meta description>` |
+   | `NEXT_PUBLIC_GITHUB_USER` | GitHub username used to build links on Projects and Links pages |
+   | `NEXT_PUBLIC_SITE_URL` | Primary domain, e.g. `https://siand.net` (used as the "live" link for the homepage project) |
+   | `NEXT_PUBLIC_REDDIT_READER_URL` | Live URL for the Reddit Reader project's embed and live link |
+
+`.env*` is gitignored, so your `.env.local` stays on the server. Commit `.env.example` only.
+
+> **Note:** these are `NEXT_PUBLIC_*` because they're used in client components. They're inlined at build time, so you must **rebuild** after changing them — runtime env changes do not take effect.
+
+## Local development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`npm run dev` reads `.env.local` automatically. Open <http://localhost:3000>.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Docker
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Build and run with compose, pointing at your env file:
 
-## Learn More
+```bash
+docker compose --env-file .env.local up --build -d
+```
 
-To learn more about Next.js, take a look at the following resources:
+Compose substitutes the `NEXT_PUBLIC_*` vars into the build args defined in `docker-compose.yml`, which the `Dockerfile` inlines into the Next.js client bundle during `npm run build`. If you rename `.env.local` to `.env`, compose will pick it up by default and the `--env-file` flag becomes optional.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+To pick up changes to `.env.local`, force a rebuild:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+docker compose --env-file .env.local up --build -d --force-recreate
+```
 
-## Deploy on Vercel
+## Content (projects, games, files, links)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Everything else lives as static TypeScript arrays in `src/content/`:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# homepage
+- `projects.ts` — project cards
+- `games.ts` — game metadata
+- `files.ts` — hosted files (drop the actual files in `public/files/`)
+- `links.ts` — external links
+
+The personal bits inside these arrays (GitHub URLs, your live site URL) read from the env vars above. Project descriptions and titles are still inline — edit them directly if they don't match your projects.
+
+## Project structure
+
+```
+src/
+  app/         Next.js app router routes (pages + API)
+  components/  Layout, UI, game components
+  content/     Static content arrays (projects, games, files, links)
+  games/       Game implementations (Sudoku, Nonogram, Flow, etc.)
+  lib/         Shared utilities, types, site config
+data/          Runtime data (leaderboard, traffic) — gitignored
+public/        Static assets
+```
+
+Knowledge-base docs are in `ai_docs/` (gitignored, local only).

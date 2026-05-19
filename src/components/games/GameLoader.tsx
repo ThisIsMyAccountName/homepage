@@ -43,6 +43,13 @@ const gameRegistry: Record<string, GameEntry> = {
         default: mod.XColoringGame as unknown as ComponentType,
       })),
   },
+  flow: {
+    type: "component",
+    load: () =>
+      import("@/games/flow").then((mod) => ({
+        default: mod.FlowGame as unknown as ComponentType,
+      })),
+  },
   idealer: {
     type: "iframe",
     src: "/games/idealer/index.html",
