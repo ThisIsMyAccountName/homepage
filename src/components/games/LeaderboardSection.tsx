@@ -18,6 +18,8 @@ interface LeaderboardSectionProps {
   pollMs?: number;
   /** Bump this to force an immediate refetch (e.g. right after a score submit). */
   refreshKey?: number;
+  /** Max rows to render. Default 20 — keeps the list from overflowing the screen. */
+  limit?: number;
 }
 
 const GAME_LABEL: Record<GameId, string> = {
@@ -36,6 +38,7 @@ export function LeaderboardSection({
   game,
   pollMs = 30_000,
   refreshKey = 0,
+  limit = 20,
 }: LeaderboardSectionProps) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,8 +88,8 @@ export function LeaderboardSection({
   }
 
   return (
-    <div className="space-y-1">
-      {entries.map((entry, i) => (
+    <div className="max-h-[70vh] space-y-1 overflow-y-auto">
+      {entries.slice(0, limit).map((entry, i) => (
         <div
           key={`${entry.name}-${entry.time}-${entry.game ?? ""}-${i}`}
           className="flex items-center gap-2 rounded-md px-2 py-1.5"

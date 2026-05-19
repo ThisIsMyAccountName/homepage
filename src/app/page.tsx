@@ -1,13 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { siteConfig } from "@/lib/config";
-import { projects } from "@/content/projects";
-import { games } from "@/content/games";
-import { links } from "@/content/links";
 import { SubmitScore } from "@/components/games/SubmitScore";
+import { ShareScore } from "@/components/games/ShareScore";
 import { LeaderboardSection } from "@/components/games/LeaderboardSection";
 
 // Dynamic import with ssr:false prevents hydration mismatch from localStorage/window access
@@ -55,189 +52,21 @@ const DailyXColoring = dynamic(
 
 export default function HomePage() {
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-10 sm:px-6 sm:py-16">
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-10 sm:px-6 sm:py-16">
       {/* Hero */}
       <div className="text-center space-y-3 mb-12">
         <h1 className="text-3xl font-bold tracking-tight sm:text-5xl">
           {siteConfig.name}
         </h1>
         <p className="text-muted text-base sm:text-lg max-w-md mx-auto">
-          {siteConfig.description}
+          A new set of daily puzzles every day — race the clock and climb the
+          leaderboard.
         </p>
       </div>
 
       {/* Daily Puzzles */}
       <DailySection />
-
-      {/* Section links — buffed up */}
-      <nav className="grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-2">
-        <SectionCardProjects />
-        <SectionCardGames />
-        <SectionCardFiles />
-        <SectionCardLinks />
-      </nav>
     </main>
-  );
-}
-
-/* --- Section Cards with rotating content --- */
-
-function SectionCardProjects() {
-  const [idx, setIdx] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setIdx((i) => (i + 1) % projects.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const project = projects[idx];
-
-  return (
-    <Link
-      href="/projects"
-      className="group relative flex flex-col justify-between overflow-hidden rounded-xl border border-border bg-card p-5 transition-all hover:bg-card-hover hover:border-accent/40 hover:scale-[1.02] h-[160px]"
-    >
-      <div>
-        <span className="text-accent font-mono text-xs">&gt; Projects</span>
-        <p className="mt-2 text-sm font-medium text-foreground group-hover:text-accent transition-colors truncate">
-          {project.title}
-        </p>
-        <p className="text-xs text-muted mt-1 line-clamp-2">
-          {project.description.slice(0, 80)}...
-        </p>
-      </div>
-      <div className="mt-3 flex gap-1.5 flex-wrap">
-        {project.tags.slice(0, 3).map((tag) => (
-          <span
-            key={tag}
-            className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-accent/10 text-accent"
-          >
-            {tag}
-          </span>
-        ))}
-      </div>
-      {/* Rotation dots */}
-      <div className="absolute top-3 right-3 flex gap-1">
-        {projects.map((_, i) => (
-          <span
-            key={i}
-            className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? "bg-accent" : "bg-border"}`}
-          />
-        ))}
-      </div>
-    </Link>
-  );
-}
-
-function SectionCardGames() {
-  const [idx, setIdx] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setIdx((i) => (i + 1) % games.length);
-    }, 3500);
-    return () => clearInterval(interval);
-  }, []);
-
-  const game = games[idx];
-
-  return (
-    <Link
-      href="/games"
-      className="group relative flex flex-col justify-between overflow-hidden rounded-xl border border-border bg-card p-5 transition-all hover:bg-card-hover hover:border-accent/40 hover:scale-[1.02] h-[160px]"
-    >
-      <div>
-        <span className="text-accent font-mono text-xs">&gt; Games</span>
-        <p className="mt-2 text-sm font-medium text-foreground group-hover:text-accent transition-colors truncate">
-          {game.title}
-        </p>
-        <p className="text-xs text-muted mt-1 line-clamp-2">
-          {game.description.slice(0, 80)}...
-        </p>
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <span className="text-[10px] text-muted font-mono">
-          {games.length} games available
-        </span>
-      </div>
-      <div className="absolute top-3 right-3 flex gap-1">
-        {games.map((_, i) => (
-          <span
-            key={i}
-            className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? "bg-accent" : "bg-border"}`}
-          />
-        ))}
-      </div>
-    </Link>
-  );
-}
-
-function SectionCardFiles() {
-  return (
-    <Link
-      href="/files"
-      className="group flex flex-col justify-between overflow-hidden rounded-xl border border-border bg-card p-5 transition-all hover:bg-card-hover hover:border-accent/40 hover:scale-[1.02] h-[160px]"
-    >
-      <div>
-        <span className="text-accent font-mono text-xs">&gt; Files</span>
-        <p className="mt-2 text-sm font-medium text-foreground group-hover:text-accent transition-colors">
-          Downloads
-        </p>
-        <p className="text-xs text-muted mt-1">
-          Hosted files, configs, and resources available for download.
-        </p>
-      </div>
-      <div className="mt-3">
-        <span className="text-[10px] text-muted font-mono">
-          Direct links &bull; No login
-        </span>
-      </div>
-    </Link>
-  );
-}
-
-function SectionCardLinks() {
-  const [idx, setIdx] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setIdx((i) => (i + 1) % links.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const link = links[idx];
-
-  return (
-    <Link
-      href="/links"
-      className="group relative flex flex-col justify-between overflow-hidden rounded-xl border border-border bg-card p-5 transition-all hover:bg-card-hover hover:border-accent/40 hover:scale-[1.02] h-[160px]"
-    >
-      <div>
-        <span className="text-accent font-mono text-xs">&gt; Links</span>
-        <p className="mt-2 text-sm font-medium text-foreground group-hover:text-accent transition-colors truncate">
-          {link.title}
-        </p>
-        <p className="text-xs text-muted mt-1 line-clamp-2">
-          {link.description}
-        </p>
-      </div>
-      <div className="mt-3">
-        <span className="text-[10px] text-muted font-mono">
-          {links.length} links
-        </span>
-      </div>
-      <div className="absolute top-3 right-3 flex gap-1">
-        {links.map((_, i) => (
-          <span
-            key={i}
-            className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? "bg-accent" : "bg-border"}`}
-          />
-        ))}
-      </div>
-    </Link>
   );
 }
 
@@ -296,8 +125,8 @@ function DailySection() {
           ))}
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-lg border border-border bg-card p-4">
+        <div className="grid gap-6 lg:grid-cols-[7fr_3fr]">
+          <div className="rounded-lg border border-border bg-card p-4 sm:p-6">
             {active === "sudoku" && (
               <DailyGameSection onScoreSubmitted={handleScoreSubmitted} />
             )}
@@ -340,12 +169,19 @@ function DailyGameSection({
     <div>
       <DailyGame onComplete={handleComplete} />
       {completed && completionData && (
-        <SubmitScore
-          game="sudoku"
-          time={completionData.time}
-          errors={completionData.errors}
-          onSubmitted={onScoreSubmitted}
-        />
+        <>
+          <SubmitScore
+            game="sudoku"
+            time={completionData.time}
+            errors={completionData.errors}
+            onSubmitted={onScoreSubmitted}
+          />
+          <ShareScore
+            game="sudoku"
+            time={completionData.time}
+            errors={completionData.errors}
+          />
+        </>
       )}
     </div>
   );
@@ -371,12 +207,19 @@ function DailyNonogramSection({
     <div>
       <DailyNonogram onComplete={handleComplete} />
       {completed && completionData && (
-        <SubmitScore
-          game="nonogram"
-          time={completionData.time}
-          errors={completionData.errors}
-          onSubmitted={onScoreSubmitted}
-        />
+        <>
+          <SubmitScore
+            game="nonogram"
+            time={completionData.time}
+            errors={completionData.errors}
+            onSubmitted={onScoreSubmitted}
+          />
+          <ShareScore
+            game="nonogram"
+            time={completionData.time}
+            errors={completionData.errors}
+          />
+        </>
       )}
     </div>
   );
@@ -402,12 +245,19 @@ function DailyXColoringSection({
     <div>
       <DailyXColoring onComplete={handleComplete} />
       {completed && completionData && (
-        <SubmitScore
-          game="x-coloring"
-          time={completionData.time}
-          errors={completionData.errors}
-          onSubmitted={onScoreSubmitted}
-        />
+        <>
+          <SubmitScore
+            game="x-coloring"
+            time={completionData.time}
+            errors={completionData.errors}
+            onSubmitted={onScoreSubmitted}
+          />
+          <ShareScore
+            game="x-coloring"
+            time={completionData.time}
+            errors={completionData.errors}
+          />
+        </>
       )}
     </div>
   );

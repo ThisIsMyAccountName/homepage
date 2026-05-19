@@ -21,8 +21,10 @@ import { logCompletion } from "@/games/nonogram/history";
 
 const ROWS = 7;
 const COLS = 7;
-const MAX_CELL = 36;
-const MIN_CELL = 24;
+// High cap: cells grow to fill the column on normal screens; the cap only
+// binds on very large displays (where the board is then centered).
+const MAX_CELL = 140;
+const MIN_CELL = 20;
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -99,10 +101,15 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
   useEffect(() => {
     const el = puzzleRef.current;
     if (!el) return;
-    const obs = new ResizeObserver(() => setAvailableW(el.getBoundingClientRect().width));
+    const measure = () => setAvailableW(el.getBoundingClientRect().width);
+    const obs = new ResizeObserver(measure);
     obs.observe(el);
-    setAvailableW(el.getBoundingClientRect().width);
-    return () => obs.disconnect();
+    measure();
+    window.addEventListener("resize", measure);
+    return () => {
+      obs.disconnect();
+      window.removeEventListener("resize", measure);
+    };
   }, []);
 
   // Timer
@@ -231,9 +238,14 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
   const maxColClueLen = Math.max(...colClues.map((c) => c.length));
   const rowClueW = maxRowClueLen * 18 + 8;
   const colClueH = maxColClueLen * 14 + 6;
+  // Square cell sized to the available column width; rescales on resize via
+  // the ResizeObserver on the puzzle wrapper.
   const cellSize =
     availableW > 0
-      ? Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor((availableW - rowClueW) / COLS)))
+      ? Math.max(
+          MIN_CELL,
+          Math.min(MAX_CELL, Math.floor((availableW - rowClueW) / COLS))
+        )
       : MAX_CELL;
 
   return (
@@ -286,7 +298,10 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
       )}
 
       {/* Puzzle */}
-      <div ref={puzzleRef} className="relative select-none w-full">
+      <div
+        ref={puzzleRef}
+        className="relative flex w-full select-none flex-col items-center"
+      >
         {/* Column clues */}
         <div
           className={`flex transition-[filter] duration-200 ${paused ? "blur-md" : ""}`}
@@ -351,7 +366,11 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
                   return (
                     <button
                       key={c}
-                      style={{ width: cellSize, height: cellSize }}
+                      style={{
+                        width: cellSize,
+                        height: cellSize,
+                        fontSize: Math.max(11, Math.round(cellSize * 0.45)),
+                      }}
                       onClick={() => handleCellClick(r, c)}
                       onContextMenu={(e) => handleCellRightClick(e, r, c)}
                       className={[

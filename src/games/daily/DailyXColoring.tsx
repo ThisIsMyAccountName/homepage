@@ -11,6 +11,7 @@ import {
 } from "@/games/x-coloring/session";
 import { logCompletion } from "@/games/x-coloring/history";
 import { GraphBoard } from "@/components/games/GraphBoard";
+import { useBoardSize } from "@/lib/useBoardSize";
 
 /** Daily puzzle is always Hard so everyone faces the same full-featured puzzle. */
 const DAILY_DIFFICULTY = "hard" as const;
@@ -79,6 +80,15 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
     () => new Set(Object.keys(puzzle.givens).map(Number)),
     [puzzle.givens]
   );
+
+  // Largest square board that fits the column width and the screen height.
+  const { ref: boardRef, cell: boardPx } = useBoardSize({
+    count: 1,
+    reserveBelow: 200, // palette + actions + page padding
+    min: 300,
+    max: 760,
+    deps: [won],
+  });
 
   // Timer
   useEffect(() => {
@@ -206,10 +216,11 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
         )}
       </div>
 
-      {/* Board */}
+      {/* Board — square, sized to fit screen */}
+      <div ref={boardRef} className="flex w-full justify-center">
       <div
-        className="relative w-full"
-        style={{ maxWidth: 360 }}
+        className="relative"
+        style={{ width: boardPx, height: boardPx }}
       >
         <div
           className={`transition-[filter] duration-200 ${
@@ -229,7 +240,7 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
             uniqueNodes={new Set(puzzle.uniqueNeighbourNodes)}
             uniqueViolators={shownConflicts.uniqueViolators}
             onNodeClick={onNodeClick}
-            size={360}
+            size={boardPx}
           />
         </div>
         {paused && (
@@ -245,6 +256,7 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
             </button>
           </div>
         )}
+      </div>
       </div>
 
       {/* Palette */}

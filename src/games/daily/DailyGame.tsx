@@ -15,6 +15,13 @@ import {
   clearDailySession,
 } from "@/games/sudoku/session";
 
+/**
+ * Board width cap: never wider than its column, and never so tall (it is
+ * square) that the board + surrounding chrome can't fit the viewport height.
+ * Pure CSS so it reflows on every resize with no JS measurement.
+ */
+const BOARD_MAX = "min(100%, calc(100svh - 220px))";
+
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -198,16 +205,18 @@ export function DailyGame({ onComplete }: DailyGameProps) {
         )}
       </div>
 
-      {/* 6x6 Grid (with pause overlay) */}
-      <div className="relative" style={{ width: "min(100%, 288px)" }}>
+      {/* 6x6 grid — responsive square, capped so it always fits the viewport */}
+      <div className="relative w-full" style={{ maxWidth: BOARD_MAX }}>
       <div
         className={`grid select-none border-2 border-foreground/60 transition-[filter] duration-200 ${
           paused ? "blur-md pointer-events-none" : ""
         }`}
         style={{
-          gridTemplateColumns: "repeat(6, minmax(0, 48px))",
-          gridTemplateRows: "repeat(6, minmax(0, 48px))",
+          gridTemplateColumns: "repeat(6, 1fr)",
+          gridTemplateRows: "repeat(6, 1fr)",
+          aspectRatio: "1 / 1",
           width: "100%",
+          containerType: "inline-size",
         }}
         aria-hidden={paused}
       >
@@ -224,9 +233,10 @@ export function DailyGame({ onComplete }: DailyGameProps) {
               <button
                 key={`${r}-${c}`}
                 onClick={() => !won && setSelected([r, c])}
+                style={{ fontSize: "clamp(0.9rem, 7cqw, 3.25rem)" }}
                 className={`
                   flex items-center justify-center
-                  text-sm font-mono font-bold
+                  font-mono font-bold
                   transition-colors cursor-pointer
                   ${bg}
                   ${rightBox ? "border-r-2 border-r-foreground/60" : "border-r border-r-border"}
@@ -259,14 +269,14 @@ export function DailyGame({ onComplete }: DailyGameProps) {
         )}
       </div>
 
-      {/* Number pad — matches grid width, buttons scale to fill */}
-      <div className="flex gap-1.5 w-full" style={{ maxWidth: "min(100%, 288px)" }}>
+      {/* Number pad — matches the board width */}
+      <div className="flex gap-1.5 w-full" style={{ maxWidth: BOARD_MAX }}>
         {[1, 2, 3, 4, 5, 6].map((num) => (
           <button
             key={num}
             onClick={() => placeNumber(num)}
             disabled={won}
-            className="flex flex-1 min-w-0 h-9 items-center justify-center rounded-md border border-border bg-card font-mono text-sm font-bold text-foreground transition-colors hover:bg-card-hover hover:border-accent/40 active:bg-accent/20 disabled:opacity-50"
+            className="flex flex-1 min-w-0 h-14 items-center justify-center rounded-md border border-border bg-card font-mono text-lg font-bold text-foreground transition-colors hover:bg-card-hover hover:border-accent/40 active:bg-accent/20 disabled:opacity-50"
           >
             {num}
           </button>
@@ -274,7 +284,7 @@ export function DailyGame({ onComplete }: DailyGameProps) {
         <button
           onClick={() => placeNumber(null)}
           disabled={won}
-          className="flex flex-1 min-w-0 h-9 items-center justify-center rounded-md border border-border bg-card text-sm text-muted transition-colors hover:bg-card-hover disabled:opacity-50"
+          className="flex flex-1 min-w-0 h-14 items-center justify-center rounded-md border border-border bg-card text-lg text-muted transition-colors hover:bg-card-hover disabled:opacity-50"
         >
           &times;
         </button>

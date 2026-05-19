@@ -12,7 +12,7 @@ export const projects: Project[] = [
     slug: "reddit-reader",
     title: "Reddit Reader",
     description:
-      "A custom web app to browse Reddit using the public JSON API. Features Flask backend, AJAX settings, CSRF-protected forms, subreddit/post/comment viewing, and user profile pages.",
+      "A custom web app to browse Reddit using the public JSON API. Features Flask backend, AJAX settings, CSRF-protected forms, subreddit/post/comment viewing, and user profile pages. \nKey features: drag to resize media, click to load comments, clear 'viewed' indicator, external media imbedduing, and more.",
     tags: ["Python", "Flask", "Reddit API", "WTForms"],
     images: ["/images/reddit-reader.png"],
     embed: REDDIT_READER_URL,

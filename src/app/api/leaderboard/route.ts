@@ -196,7 +196,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       date: todayKey,
       game: gameParam,
-      entries: entries.slice(0, 10),
+      entries: entries.slice(0, 20),
       total: entries.length,
     });
   }
@@ -209,7 +209,7 @@ export async function GET(request: NextRequest) {
   const combined = sortEntries(all).map(stripIp);
   return NextResponse.json({
     date: todayKey,
-    entries: combined.slice(0, 10),
+    entries: combined.slice(0, 20),
     total: combined.length,
   });
 }
