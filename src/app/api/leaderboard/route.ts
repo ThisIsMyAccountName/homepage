@@ -4,7 +4,7 @@ import path from "path";
 import { sanitizeName, validateSubmission } from "@/lib/security";
 import { getTodayKey } from "@/lib/daily";
 
-export const GAMES = ["sudoku", "nonogram", "x-coloring"] as const;
+export const GAMES = ["sudoku", "nonogram", "x-coloring", "crossword"] as const;
 export type GameId = (typeof GAMES)[number];
 
 export interface LeaderboardEntry {
@@ -149,6 +149,74 @@ async function cleanupLegacyNonogram(): Promise<void> {
   }
 }
 
+interface CombinedEntry {
+  name: string;
+  /** Sum of best per-game times (no error penalty). */
+  time: number;
+  /** Sum of best per-game errors, informational only. */
+  errors: number;
+  /** One sub-record per game; keys are exactly `GAMES`. */
+  perGame: Partial<Record<GameId, { time: number; errors: number }>>;
+}
+
+/**
+ * Build the "combined" board: keep only players who have at least one entry
+ * in every game today, then rank by sum of their best per-game times. Errors
+ * are summed but never used for ranking (per the daily-redo design).
+ *
+ * Names are matched case-insensitively after trimming so casing variations
+ * across the three submissions still link up to one player.
+ */
+function buildCombinedEntries(
+  bucket: { [game in GameId]?: EntryWithIp[] }
+): CombinedEntry[] {
+  // Key → display name + best per-game record.
+  const byKey = new Map<
+    string,
+    {
+      display: string;
+      best: Partial<Record<GameId, { time: number; errors: number }>>;
+    }
+  >();
+
+  for (const game of GAMES) {
+    for (const e of bucket[game] ?? []) {
+      const key = e.name.trim().toLowerCase();
+      if (!key) continue;
+      let row = byKey.get(key);
+      if (!row) {
+        row = { display: e.name, best: {} };
+        byKey.set(key, row);
+      }
+      const prev = row.best[game];
+      if (!prev || e.time < prev.time) {
+        row.best[game] = { time: e.time, errors: e.errors };
+      }
+    }
+  }
+
+  const entries: CombinedEntry[] = [];
+  for (const { display, best } of byKey.values()) {
+    if (!GAMES.every((g) => best[g])) continue;
+    // Walk GAMES so adding a new daily here doesn't require touching this
+    // aggregation code.
+    const perGame: Partial<Record<GameId, { time: number; errors: number }>> =
+      {};
+    let totalTime = 0;
+    let totalErrors = 0;
+    for (const g of GAMES) {
+      const rec = best[g]!;
+      perGame[g] = rec;
+      totalTime += rec.time;
+      totalErrors += rec.errors;
+    }
+    entries.push({ name: display, time: totalTime, errors: totalErrors, perGame });
+  }
+
+  entries.sort((a, b) => a.time - b.time);
+  return entries;
+}
+
 const EASTER_EGGS = [
   "Nice try, hacker. The puzzle is the only thing to crack here.",
   "SQL injection? In a JSON file? Bold strategy.",
@@ -185,10 +253,20 @@ export async function GET(request: NextRequest) {
   const bucket = data[todayKey] ?? {};
   const gameParam = request.nextUrl.searchParams.get("game");
 
+  if (gameParam === "combined") {
+    const combined = buildCombinedEntries(bucket);
+    return NextResponse.json({
+      date: todayKey,
+      game: "combined",
+      entries: combined.slice(0, 20),
+      total: combined.length,
+    });
+  }
+
   if (gameParam) {
     if (!isValidGame(gameParam)) {
       return NextResponse.json(
-        { error: `Unknown game. Allowed: ${GAMES.join(", ")}` },
+        { error: `Unknown game. Allowed: ${GAMES.join(", ")}, combined` },
         { status: 400 }
       );
     }

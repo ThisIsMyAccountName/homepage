@@ -11,11 +11,10 @@ import {
 } from "@/games/x-coloring/session";
 import { logCompletion } from "@/games/x-coloring/history";
 import { GraphBoard } from "@/components/games/GraphBoard";
-import { useBoardSize } from "@/lib/useBoardSize";
+import { useBoardSize, DAILY_BOARD } from "@/lib/useBoardSize";
 
 /** Daily puzzle is always Hard so everyone faces the same full-featured puzzle. */
 const DAILY_DIFFICULTY = "hard" as const;
-const COMPLETED_KEY = "daily-x-coloring-completed-";
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -69,11 +68,6 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
   // Daily games start paused (matches sudoku/nonogram convention).
   const [paused, setPaused] = useState(true);
   const [won, setWon] = useState(false);
-  const [alreadyCompleted] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      localStorage.getItem(`${COMPLETED_KEY}${todayKey}`) === "1"
-  );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const givenNodes = useMemo(
@@ -82,33 +76,32 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
   );
 
   // Largest square board that fits the column width and the screen height.
+  // Shared with the other daily games so every board is the same size.
   const { ref: boardRef, cell: boardPx } = useBoardSize({
     count: 1,
-    reserveBelow: 200, // palette + actions + page padding
-    min: 300,
-    max: 760,
+    ...DAILY_BOARD,
     deps: [won],
   });
 
   // Timer
   useEffect(() => {
-    if (!won && !paused && !alreadyCompleted) {
+    if (!won && !paused) {
       intervalRef.current = setInterval(() => setTimer((t) => t + 1), 1000);
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [won, paused, alreadyCompleted]);
+  }, [won, paused]);
 
   // Auto-save
   useEffect(() => {
-    if (won || alreadyCompleted) return;
+    if (won) return;
     saveDailySession(todayKey, { coloring, timer, errorCount });
-  }, [coloring, timer, errorCount, won, alreadyCompleted, todayKey]);
+  }, [coloring, timer, errorCount, won, todayKey]);
 
   const applyColor = useCallback(
     (nodeId: number, colorIdx: number | null) => {
-      if (won || alreadyCompleted || paused) return;
+      if (won || paused) return;
       // Given nodes are locked — ignore attempts to recolor or clear them.
       if (nodeId in puzzle.givens) return;
       const next = [...coloring];
@@ -126,7 +119,6 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
         );
         if (conf.edges.size === 0 && conf.uniqueViolators.size === 0 && conf.forbiddenPairViolators.size === 0) {
           setWon(true);
-          localStorage.setItem(`${COMPLETED_KEY}${todayKey}`, "1");
           clearDailySession(todayKey);
           logCompletion({
             id: `daily-${todayKey}`,
@@ -139,7 +131,7 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
         }
       }
     },
-    [coloring, won, alreadyCompleted, paused, puzzle, timer, errorCount, todayKey, onComplete]
+    [coloring, won, paused, puzzle, timer, errorCount, todayKey, onComplete]
   );
 
   const onNodeClick = useCallback(
@@ -181,17 +173,6 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [paused, puzzle.colors, selected, applyColor]);
-
-  if (alreadyCompleted && !won) {
-    return (
-      <div className="flex flex-col items-center gap-2 p-6 text-center">
-        <p className="text-sm text-accent font-medium">
-          You already completed today&apos;s puzzle!
-        </p>
-        <p className="text-xs text-muted">Come back tomorrow for a new one.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col items-center gap-3">

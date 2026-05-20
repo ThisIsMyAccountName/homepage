@@ -50,6 +50,13 @@ const gameRegistry: Record<string, GameEntry> = {
         default: mod.FlowGame as unknown as ComponentType,
       })),
   },
+  crossword: {
+    type: "component",
+    load: () =>
+      import("@/games/crossword").then((mod) => ({
+        default: mod.CrosswordGame as unknown as ComponentType,
+      })),
+  },
   idealer: {
     type: "iframe",
     src: "/games/idealer/index.html",

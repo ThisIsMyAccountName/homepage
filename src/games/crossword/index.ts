@@ -1,0 +1,1 @@
+export { CrosswordGame } from "./CrosswordGame";

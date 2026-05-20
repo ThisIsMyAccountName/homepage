@@ -14,13 +14,7 @@ import {
   loadDailySession,
   clearDailySession,
 } from "@/games/sudoku/session";
-
-/**
- * Board width cap: never wider than its column, and never so tall (it is
- * square) that the board + surrounding chrome can't fit the viewport height.
- * Pure CSS so it reflows on every resize with no JS measurement.
- */
-const BOARD_MAX = "min(100%, calc(100svh - 220px))";
+import { useBoardSize, DAILY_BOARD } from "@/lib/useBoardSize";
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -35,11 +29,12 @@ function generateDailyGame(): { puzzle: Board; solution: Board; board: Board } {
   return { puzzle, solution, board: puzzle.map((r) => [...r]) };
 }
 
-interface DailyGameProps {
+interface DailySudokuProps {
+  /** Fires the first time the board is solved. Parent decides what to show next. */
   onComplete: (time: number, errors: number) => void;
 }
 
-export function DailyGame({ onComplete }: DailyGameProps) {
+export function DailySudoku({ onComplete }: DailySudokuProps) {
   const todayKey = getTodayKey();
   const [game, setGame] = useState<{
     puzzle: Board;
@@ -61,19 +56,23 @@ export function DailyGame({ onComplete }: DailyGameProps) {
   const [timer, setTimer] = useState(
     () => loadDailySession(todayKey, 6)?.timer ?? 0
   );
-  const [running, setRunning] = useState(true);
   const [paused, setPaused] = useState(true);
   const [won, setWon] = useState(false);
-  const [alreadyCompleted] = useState(() => {
-    return localStorage.getItem(`daily-completed-${todayKey}`) === "1";
-  });
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const config = CONFIGS[6];
 
+  // Largest square board that fits the column width and the screen height.
+  // Shared with the other daily games so every board is the same size.
+  const { ref: boardRef, cell: boardPx } = useBoardSize({
+    count: 1,
+    ...DAILY_BOARD,
+    deps: [won],
+  });
+
   // Timer
   useEffect(() => {
-    if (running && !paused && !won && !alreadyCompleted) {
+    if (!paused && !won) {
       intervalRef.current = setInterval(() => {
         setTimer((t) => t + 1);
       }, 1000);
@@ -81,18 +80,17 @@ export function DailyGame({ onComplete }: DailyGameProps) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [running, paused, won, alreadyCompleted]);
+  }, [paused, won]);
 
   // Auto-save the in-progress daily puzzle
   useEffect(() => {
-    if (!game || won || alreadyCompleted) return;
+    if (!game || won) return;
     saveDailySession(todayKey, game.board, timer, errorCount);
-  }, [game, timer, errorCount, won, alreadyCompleted, todayKey]);
+  }, [game, timer, errorCount, won, todayKey]);
 
-  // Place number
   const placeNumber = useCallback(
     (num: number | null) => {
-      if (!game || !selected || won || alreadyCompleted || paused) return;
+      if (!game || !selected || won || paused) return;
       const [row, col] = selected;
       if (game.puzzle[row][col] !== null) return;
 
@@ -105,9 +103,6 @@ export function DailyGame({ onComplete }: DailyGameProps) {
         const errs = getErrors(newBoard, game.solution);
         if (errs.length === 0) {
           setWon(true);
-          setRunning(false);
-          // Mark as completed today
-          localStorage.setItem(`daily-completed-${todayKey}`, "1");
           clearDailySession(todayKey);
           onComplete(timer, errorCount);
         } else {
@@ -116,10 +111,9 @@ export function DailyGame({ onComplete }: DailyGameProps) {
         }
       }
     },
-    [game, selected, won, alreadyCompleted, paused, timer, errorCount, onComplete, todayKey]
+    [game, selected, won, paused, timer, errorCount, onComplete, todayKey]
   );
 
-  // Check
   const checkBoard = useCallback(() => {
     if (!game) return;
     const errs = getErrors(game.board, game.solution);
@@ -168,17 +162,6 @@ export function DailyGame({ onComplete }: DailyGameProps) {
     );
   }
 
-  if (alreadyCompleted && !won) {
-    return (
-      <div className="flex flex-col items-center gap-2 p-6 text-center">
-        <p className="text-sm text-accent font-medium">
-          You already completed today&apos;s puzzle!
-        </p>
-        <p className="text-xs text-muted">Come back tomorrow for a new one.</p>
-      </div>
-    );
-  }
-
   const { board, puzzle } = game;
   const isError = (r: number, c: number) =>
     errors.some(([er, ec]) => er === r && ec === c);
@@ -205,17 +188,16 @@ export function DailyGame({ onComplete }: DailyGameProps) {
         )}
       </div>
 
-      {/* 6x6 grid — responsive square, capped so it always fits the viewport */}
-      <div className="relative w-full" style={{ maxWidth: BOARD_MAX }}>
+      {/* 6x6 grid — square, sized to fit screen (shared daily board size) */}
+      <div ref={boardRef} className="relative flex w-full justify-center">
+      <div className="relative" style={{ width: boardPx, height: boardPx }}>
       <div
-        className={`grid select-none border-2 border-foreground/60 transition-[filter] duration-200 ${
+        className={`grid h-full w-full select-none border-2 border-foreground/60 transition-[filter] duration-200 ${
           paused ? "blur-md pointer-events-none" : ""
         }`}
         style={{
           gridTemplateColumns: "repeat(6, 1fr)",
           gridTemplateRows: "repeat(6, 1fr)",
-          aspectRatio: "1 / 1",
-          width: "100%",
           containerType: "inline-size",
         }}
         aria-hidden={paused}
@@ -254,23 +236,24 @@ export function DailyGame({ onComplete }: DailyGameProps) {
           })
         )}
       </div>
-        {paused && (
+        {paused && !won && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
             <span className="text-sm font-medium text-foreground tracking-wide">
-              Paused
+              {timer === 0 ? "Daily Sudoku" : "Paused"}
             </span>
             <button
               onClick={() => setPaused(false)}
-              className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-background transition-colors hover:bg-accent-hover"
+              className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-background transition-colors hover:bg-accent-hover"
             >
-              Resume
+              {timer === 0 ? "Start" : "Resume"}
             </button>
           </div>
         )}
       </div>
+      </div>
 
-      {/* Number pad — matches the board width */}
-      <div className="flex gap-1.5 w-full" style={{ maxWidth: BOARD_MAX }}>
+      {/* Number pad — matches the board width, generously tappable */}
+      <div className="flex gap-1.5" style={{ width: boardPx }}>
         {[1, 2, 3, 4, 5, 6].map((num) => (
           <button
             key={num}
@@ -285,6 +268,7 @@ export function DailyGame({ onComplete }: DailyGameProps) {
           onClick={() => placeNumber(null)}
           disabled={won}
           className="flex flex-1 min-w-0 h-14 items-center justify-center rounded-md border border-border bg-card text-lg text-muted transition-colors hover:bg-card-hover disabled:opacity-50"
+          aria-label="Clear cell"
         >
           &times;
         </button>

@@ -9,8 +9,6 @@ import {
   getErrors,
   isLineSatisfied,
   type Grid,
-  type CellState,
-  type Solution,
 } from "@/games/nonogram/generator";
 import {
   saveDailySession,
@@ -18,13 +16,10 @@ import {
   clearDailySession,
 } from "@/games/nonogram/session";
 import { logCompletion } from "@/games/nonogram/history";
+import { useBoardSize, DAILY_BOARD } from "@/lib/useBoardSize";
 
 const ROWS = 7;
 const COLS = 7;
-// High cap: cells grow to fill the column on normal screens; the cap only
-// binds on very large displays (where the board is then centered).
-const MAX_CELL = 140;
-const MIN_CELL = 20;
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -36,36 +31,6 @@ function generateDailyPuzzle() {
   const seed = getDailySeed();
   const rng = createSeededRng(seed);
   return generatePuzzle(ROWS, COLS, rng);
-}
-
-function buildShareText(
-  solution: Solution,
-  time: number,
-  errors: number,
-  dateKey: string
-): string {
-  const rows = solution
-    .map((row) => row.map((cell) => (cell ? "🟩" : "⬛")).join(""))
-    .join("\n");
-  const errStr = errors > 0 ? ` · ${errors} errors` : "";
-  return `Nonogram ${dateKey} (${solution.length}×${solution[0].length})\n${rows}\n⏱ ${formatTime(time)}${errStr}`;
-}
-
-function ShareButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      onClick={() => {
-        navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-        });
-      }}
-      className="text-xs text-muted hover:text-foreground transition-colors"
-    >
-      {copied ? "Copied!" : "Share result"}
-    </button>
-  );
 }
 
 interface DailyNonogramProps {
@@ -89,32 +54,19 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
   const [mode, setMode] = useState<"fill" | "mark">("fill");
   const [paused, setPaused] = useState(true);
   const [won, setWon] = useState(false);
-  const [alreadyCompleted] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      localStorage.getItem(`daily-nonogram-completed-${todayKey}`) === "1"
-  );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const puzzleRef = useRef<HTMLDivElement>(null);
-  const [availableW, setAvailableW] = useState(0);
 
-  useEffect(() => {
-    const el = puzzleRef.current;
-    if (!el) return;
-    const measure = () => setAvailableW(el.getBoundingClientRect().width);
-    const obs = new ResizeObserver(measure);
-    obs.observe(el);
-    measure();
-    window.addEventListener("resize", measure);
-    return () => {
-      obs.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, []);
+  // Largest square board that fits the column width and the screen height.
+  // Shared with the other daily games so every board is the same size.
+  const { ref: boardRef, cell: boardPx } = useBoardSize({
+    count: 1,
+    ...DAILY_BOARD,
+    deps: [won],
+  });
 
   // Timer
   useEffect(() => {
-    if (!won && !paused && !alreadyCompleted) {
+    if (!won && !paused) {
       intervalRef.current = setInterval(
         () => setTimer((t) => t + 1),
         1000
@@ -123,17 +75,17 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [won, paused, alreadyCompleted]);
+  }, [won, paused]);
 
   // Auto-save
   useEffect(() => {
-    if (won || alreadyCompleted) return;
+    if (won) return;
     saveDailySession(todayKey, grid, timer, errorCount);
-  }, [grid, timer, errorCount, won, alreadyCompleted, todayKey]);
+  }, [grid, timer, errorCount, won, todayKey]);
 
   const applyToggle = useCallback(
     (r: number, c: number, applyMode: "fill" | "mark") => {
-      if (won || alreadyCompleted || paused) return;
+      if (won || paused) return;
 
       const newGrid = grid.map((row) => [...row]) as Grid;
       const cur = newGrid[r][c];
@@ -149,7 +101,6 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
 
       if (isComplete(newGrid, puzzle.solution)) {
         setWon(true);
-        localStorage.setItem(`daily-nonogram-completed-${todayKey}`, "1");
         clearDailySession(todayKey);
         logCompletion({
           id: `daily-${todayKey}`,
@@ -163,7 +114,7 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
         onComplete(timer, errorCount);
       }
     },
-    [won, alreadyCompleted, paused, grid, puzzle.solution, timer, errorCount, onComplete, todayKey]
+    [won, paused, grid, puzzle.solution, timer, errorCount, onComplete, todayKey]
   );
 
   const handleCellClick = useCallback(
@@ -222,31 +173,23 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selected, paused, applyToggle, grid]);
 
-  if (alreadyCompleted && !won) {
-    return (
-      <div className="flex flex-col items-center gap-2 p-6 text-center">
-        <p className="text-sm text-accent font-medium">
-          You already completed today&apos;s puzzle!
-        </p>
-        <p className="text-xs text-muted">Come back tomorrow for a new one.</p>
-      </div>
-    );
-  }
-
-  const { rowClues, colClues, solution } = puzzle;
+  const { rowClues, colClues } = puzzle;
   const maxRowClueLen = Math.max(...rowClues.map((r) => r.length));
   const maxColClueLen = Math.max(...colClues.map((c) => c.length));
-  const rowClueW = maxRowClueLen * 18 + 8;
-  const colClueH = maxColClueLen * 14 + 6;
-  // Square cell sized to the available column width; rescales on resize via
-  // the ResizeObserver on the puzzle wrapper.
-  const cellSize =
-    availableW > 0
-      ? Math.max(
-          MIN_CELL,
-          Math.min(MAX_CELL, Math.floor((availableW - rowClueW) / COLS))
-        )
-      : MAX_CELL;
+  // Clue gutter dims are picked so the *entire* puzzle — row gutter + grid —
+  // fits inside the shared daily square, even on a 320px-viewport phone.
+  // Each clue digit ≈ 12px wide / 11px tall in the 10px mono font below.
+  const CLUE_DIGIT_W = 12;
+  const CLUE_DIGIT_H = 11;
+  const rowClueW = maxRowClueLen * CLUE_DIGIT_W + 6;
+  const colClueH = maxColClueLen * CLUE_DIGIT_H + 4;
+  // Available room for cells = boardPx minus the gutter on whichever axis
+  // it lives. Take the smaller side so cells stay square.
+  const cellSize = Math.max(
+    24,
+    Math.floor(Math.min(boardPx - rowClueW, boardPx - colClueH) / COLS)
+  );
+  const clueFontPx = Math.max(9, Math.min(11, Math.round(cellSize * 0.34)));
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -299,7 +242,7 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
 
       {/* Puzzle */}
       <div
-        ref={puzzleRef}
+        ref={boardRef}
         className="relative flex w-full select-none flex-col items-center"
       >
         {/* Column clues */}
@@ -319,7 +262,7 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
                 {clue.map((n, i) => (
                   <span
                     key={i}
-                    className={`font-mono text-[11px] leading-[14px] ${
+                    className={`font-mono ${
                       satisfied ? "text-foreground/25" : "text-muted"
                     }`}
                   >
@@ -423,21 +366,14 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-4">
-        {!won && (
-          <button
-            onClick={checkBoard}
-            className="text-xs text-muted hover:text-foreground transition-colors"
-          >
-            Check for errors
-          </button>
-        )}
-        {won && (
-          <ShareButton
-            text={buildShareText(solution, timer, errorCount, todayKey)}
-          />
-        )}
-      </div>
+      {!won && (
+        <button
+          onClick={checkBoard}
+          className="text-xs text-muted hover:text-foreground transition-colors"
+        >
+          Check for errors
+        </button>
+      )}
     </div>
   );
 }

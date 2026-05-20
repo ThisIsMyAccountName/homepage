@@ -45,4 +45,13 @@ export const games: GameMeta[] = [
     thumbnail: "/images/placeholder.svg",
     controls: "Click a sequence of nodes from S to T, then press Push to commit the bottleneck. Clear path, Undo, and Reset are available.",
   },
+  {
+    slug: "crossword",
+    title: "Crossword",
+    description:
+      "Mini crossword with user-picked dimensions (3×3 up to 7×7). Procedural black squares, clues drawn from a 140k+ answer bank, with timer, pause, and check.",
+    thumbnail: "/images/placeholder.svg",
+    controls:
+      "Click a cell to select. Type letters/digits to fill. Spacebar flips direction. Arrow keys / Tab jump between clues. Backspace clears.",
+  },
 ];

@@ -1,9 +1,10 @@
-export type ShareGame = "sudoku" | "nonogram" | "x-coloring";
+export type ShareGame = "sudoku" | "nonogram" | "x-coloring" | "crossword";
 
 const GAME_META: Record<ShareGame, { emoji: string; label: string }> = {
   sudoku: { emoji: "🔢", label: "Daily Sudoku" },
   nonogram: { emoji: "🖼️", label: "Daily Nonogram" },
   "x-coloring": { emoji: "🎨", label: "Daily X Coloring" },
+  crossword: { emoji: "📝", label: "Daily Crossword" },
 };
 
 function formatTime(seconds: number): string {

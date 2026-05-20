@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { sanitizeName } from "@/lib/security";
 
-export type GameId = "sudoku" | "nonogram" | "x-coloring";
+export type GameId = "sudoku" | "nonogram" | "x-coloring" | "crossword";
 
 interface SubmitScoreProps {
   game: GameId;
   time: number;
   errors: number;
-  onSubmitted?: () => void;
+  /** Fires after the score is accepted by the API. Receives the sanitized name. */
+  onSubmitted?: (name: string) => void;
 }
 
 export function SubmitScore({ game, time, errors, onSubmitted }: SubmitScoreProps) {
@@ -55,7 +56,7 @@ export function SubmitScore({ game, time, errors, onSubmitted }: SubmitScoreProp
       }
 
       setSubmitted(true);
-      onSubmitted?.();
+      onSubmitted?.(name.trim());
     } catch {
       setError("Network error. Try again.");
     }
