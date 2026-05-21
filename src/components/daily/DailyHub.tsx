@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { siteConfig } from "@/lib/config";
 import {
   ADVANCE_LABELS,
@@ -10,6 +10,8 @@ import {
 import { DailyLeaderboardPanel } from "@/components/daily/DailyLeaderboardPanel";
 import { DailyRecap } from "@/components/daily/DailyRecap";
 import { DailyStepper } from "@/components/daily/DailyStepper";
+import { fetchDailyCrossword } from "@/games/crossword/dailyFetch";
+import { getTodayKey } from "@/lib/daily";
 import {
   DAILY_GAMES,
   GAME_LABELS,
@@ -114,14 +116,52 @@ export function DailyHub() {
   // finished. Resets if the active step changes.
   const [viewingCrosswordSolution, setViewingCrosswordSolution] =
     useState(false);
-  // Stable id of the crossword the player just solved. Surfaces the
-  // upvote button on the completion card; unset before the win, set on
-  // completion, persisted across this page-load only (a refresh re-loads
-  // the puzzle through the same fetcher and the upvote control's own
-  // localStorage cache keeps "already voted" sticky).
-  const [solvedCrosswordId, setSolvedCrosswordId] = useState<string | null>(
+  // Stable id of today's crossword puzzle. Populated either by:
+  //   (a) the player solving it in this session (fast path — comes
+  //       through `handleCrosswordComplete`), or
+  //   (b) a lazy fetch when the user revisits a previously-solved
+  //       crossword on a different page-load (effect below).
+  // Either way it's the key the upvote / downvote controls need.
+  const [todayCrosswordId, setTodayCrosswordId] = useState<string | null>(
     null
   );
+
+  // Resolve today's puzzle id whenever the player lands on the crossword
+  // completion card without one set. `fetchDailyCrossword` is
+  // sessionStorage-cached, so this is a no-op round-trip once the daily
+  // crossword has been opened once during the visit.
+  //
+  // `fetchingRef` skips kicking off a second fetch if a previous one is
+  // still in flight — the AbortController + cleanup pattern below
+  // already handles dep-driven re-runs (each new run aborts the old),
+  // but the ref closes the door on React strict-mode double-invocations
+  // that could otherwise fire two network requests for the same id
+  // before the first resolves.
+  const fetchingRef = useRef(false);
+  useEffect(() => {
+    if (todayCrosswordId) return;
+    if (active !== "crossword") return;
+    if (!progress.crossword) return;
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    const ac = new AbortController();
+    let cancelled = false;
+    fetchDailyCrossword(getTodayKey(), ac.signal)
+      .then((res) => {
+        if (!cancelled) setTodayCrosswordId(res.puzzle.id);
+      })
+      .catch(() => {
+        // Silent fail — the vote buttons just won't render; the
+        // completion card is still functional without them.
+      })
+      .finally(() => {
+        fetchingRef.current = false;
+      });
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [active, progress.crossword, todayCrosswordId]);
 
   const handleComplete = useCallback(
     (game: DailyGameId, time: number, errors: number) => {
@@ -140,7 +180,7 @@ export function DailyHub() {
   const handleCrosswordComplete = useCallback(
     (time: number, errors: number, puzzleId: string) => {
       handleComplete("crossword", time, errors);
-      setSolvedCrosswordId(puzzleId);
+      setTodayCrosswordId(puzzleId);
     },
     [handleComplete]
   );
@@ -230,9 +270,9 @@ export function DailyHub() {
                       }
                     : undefined
                 }
-                upvotePuzzleId={
-                  active === "crossword" && solvedCrosswordId
-                    ? solvedCrosswordId
+                crosswordPuzzleId={
+                  active === "crossword" && todayCrosswordId
+                    ? todayCrosswordId
                     : undefined
                 }
               />

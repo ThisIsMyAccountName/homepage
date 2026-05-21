@@ -7,12 +7,7 @@ import {
   type DailyGameId,
   type DailyProgress,
 } from "@/lib/dailyProgress";
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
+import { formatTime } from "@/lib/gameUtils";
 
 interface DailyStepperProps {
   /** Currently displayed step. `null` while showing the all-done recap. */

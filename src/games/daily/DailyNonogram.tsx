@@ -16,16 +16,11 @@ import {
   clearDailySession,
 } from "@/games/nonogram/session";
 import { logCompletion } from "@/games/nonogram/history";
+import { formatTime } from "@/lib/gameUtils";
 import { useBoardSize, DAILY_BOARD } from "@/lib/useBoardSize";
 
 const ROWS = 7;
 const COLS = 7;
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
 
 function generateDailyPuzzle() {
   const seed = getDailySeed();

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { DAILY_GAMES, GAME_LABELS, type DailyGameId } from "@/lib/dailyProgress";
+import { formatTime } from "@/lib/gameUtils";
 
 /**
  * Self-contained leaderboard with tabs for each game plus a "Combined" tab
@@ -11,8 +12,15 @@ import { DAILY_GAMES, GAME_LABELS, type DailyGameId } from "@/lib/dailyProgress"
  */
 
 type Tab = DailyGameId | "combined";
+/** Shorter labels for the leaderboard tab strip so nothing wraps on mobile. */
+const TAB_LABEL_OVERRIDES: Partial<Record<DailyGameId, string>> = {
+  "x-coloring": "Coloring",
+};
 const TABS: { id: Tab; label: string }[] = [
-  ...DAILY_GAMES.map((g) => ({ id: g as Tab, label: GAME_LABELS[g] })),
+  ...DAILY_GAMES.map((g) => ({
+    id: g as Tab,
+    label: TAB_LABEL_OVERRIDES[g] ?? GAME_LABELS[g],
+  })),
   { id: "combined" as Tab, label: "Combined" },
 ];
 
@@ -38,12 +46,6 @@ const COMBINED_ABBR: Record<DailyGameId, string> = {
   "x-coloring": "X",
   crossword: "C",
 };
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
 
 interface DailyLeaderboardPanelProps {
   /** Bumped by the hub after a submission to force an immediate refetch. */

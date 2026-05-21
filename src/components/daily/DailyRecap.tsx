@@ -8,13 +8,8 @@ import {
   type DailyProgress,
 } from "@/lib/dailyProgress";
 import { getTodayKey } from "@/lib/daily";
-import { buildShareText } from "@/lib/share";
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
+import { formatTime } from "@/lib/gameUtils";
+import { buildCombinedShareText } from "@/lib/share";
 
 async function copy(text: string): Promise<boolean> {
   try {
@@ -51,17 +46,17 @@ export function DailyRecap({ progress, onReplay }: DailyRecapProps) {
   const handleShareAll = async () => {
     const today = getTodayKey();
     const url = typeof window !== "undefined" ? `${window.location.origin}/` : "";
-    const blocks = DAILY_GAMES.filter((g) => progress[g]).map((g) =>
-      buildShareText({
-        game: g,
-        time: progress[g]?.time ?? 0,
-        errors: progress[g]?.errors ?? 0,
-        date: today,
-        url,
-      })
-    );
-    const total = `\n🏁 Daily set — total ${formatTime(totalTime)}`;
-    const ok = await copy(blocks.join("\n\n") + total);
+    // Only include games we actually have a recorded time for — legacy "=1"
+    // completions land here with time=0 and would otherwise pollute the total.
+    const entries = DAILY_GAMES.filter(
+      (g) => (progress[g]?.time ?? 0) > 0,
+    ).map((g) => ({
+      game: g,
+      time: progress[g]?.time ?? 0,
+      errors: progress[g]?.errors ?? 0,
+    }));
+    const text = buildCombinedShareText({ entries, date: today, url });
+    const ok = await copy(text);
     if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
@@ -131,13 +126,13 @@ export function DailyRecap({ progress, onReplay }: DailyRecapProps) {
         className="flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-accent/40 hover:bg-card-hover"
       >
         {copied ? (
-          <span className="text-accent">✓ Copied all three to clipboard</span>
+          <span className="text-accent">✓ Copied daily set to clipboard</span>
         ) : copyFailed ? (
           <span className="text-red-400">Copy failed — try again</span>
         ) : (
           <>
             <span>📋</span>
-            <span>Share all three</span>
+            <span>Share daily set</span>
           </>
         )}
       </button>

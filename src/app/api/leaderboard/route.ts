@@ -361,11 +361,15 @@ export async function POST(request: NextRequest) {
   if (!bucket[game]) bucket[game] = [];
   const list = bucket[game]!;
 
-  // Cap submissions per IP, per game, per day.
+  // One submission per IP, per game, per day. The client also persists a
+  // sticky flag in localStorage, but the server is the source of truth.
   const existingFromIp = list.filter((e) => e.ip === ip);
-  if (existingFromIp.length >= 3) {
+  if (existingFromIp.length >= 1) {
     return NextResponse.json(
-      { error: "Maximum submissions reached for today" },
+      {
+        error: "You've already submitted a name for today's puzzle.",
+        alreadySubmitted: true,
+      },
       { status: 429 }
     );
   }

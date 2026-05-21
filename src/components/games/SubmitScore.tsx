@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getTodayKey } from "@/lib/daily";
 import { sanitizeName } from "@/lib/security";
 
 export type GameId = "sudoku" | "nonogram" | "x-coloring" | "crossword";
@@ -13,12 +14,55 @@ interface SubmitScoreProps {
   onSubmitted?: (name: string) => void;
 }
 
+/**
+ * Per-day, per-game sticky flag so a page refresh doesn't re-show the submit
+ * form after the user has already claimed a leaderboard slot. The server
+ * enforces the same one-per-day cap by IP — this is the UX half of that.
+ */
+const SUBMIT_FLAG_PREFIX = "daily-submitted-v1-";
+function submitFlagKey(game: GameId, dateKey: string): string {
+  return `${SUBMIT_FLAG_PREFIX}${dateKey}-${game}`;
+}
+
+function readSubmittedName(game: GameId): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(submitFlagKey(game, getTodayKey()));
+  } catch {
+    return null;
+  }
+}
+
+function writeSubmittedName(game: GameId, name: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(submitFlagKey(game, getTodayKey()), name);
+  } catch {
+    // quota / private-mode — silently drop; the server still enforces.
+  }
+}
+
 export function SubmitScore({ game, time, errors, onSubmitted }: SubmitScoreProps) {
   const [name, setName] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  // Initialize from localStorage so a refresh after submitting keeps the
+  // form hidden. Safe to read in the initializer because this component
+  // only mounts on the client (the daily hub is `dynamic({ ssr: false })`).
+  const [submitted, setSubmitted] = useState(() => readSubmittedName(game) !== null);
   const [error, setError] = useState<string | null>(null);
   const [easterEgg, setEasterEgg] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // On mount (or when the game prop changes), tell the parent the
+  // already-submitted name so the leaderboard can highlight the row even
+  // after a refresh — otherwise the user loses that visual anchor.
+  useEffect(() => {
+    const stored = readSubmittedName(game);
+    if (stored) onSubmitted?.(stored);
+    // Intentionally not depending on `onSubmitted` — the parent passes a
+    // fresh function each render, and we only want to fire this once per
+    // game change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,12 +93,22 @@ export function SubmitScore({ game, time, errors, onSubmitted }: SubmitScoreProp
         return;
       }
 
+      // Server rejected because this IP already submitted today — treat as
+      // a successful "already done" so the form stays out of the way.
+      if (data.alreadySubmitted) {
+        writeSubmittedName(game, name.trim());
+        setSubmitted(true);
+        setSubmitting(false);
+        return;
+      }
+
       if (!res.ok) {
         setError(data.error || "Submission failed");
         setSubmitting(false);
         return;
       }
 
+      writeSubmittedName(game, name.trim());
       setSubmitted(true);
       onSubmitted?.(name.trim());
     } catch {

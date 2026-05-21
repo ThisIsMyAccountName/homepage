@@ -27,12 +27,7 @@ import {
 import { GameTabs } from "@/components/games/GameTabs";
 import { GameHistory, type HistoryEntry } from "@/components/games/GameHistory";
 import { ConfirmDialog } from "@/components/games/ConfirmDialog";
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
+import { formatTime } from "@/lib/gameUtils";
 
 type GameSize = 6 | 9 | 16;
 

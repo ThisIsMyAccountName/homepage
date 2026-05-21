@@ -18,7 +18,7 @@ const DailyHub = dynamic(
 
 export default function HomePage() {
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-10 sm:px-6 sm:py-16">
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-[18px] sm:px-6">
       <DailyHub />
     </main>
   );

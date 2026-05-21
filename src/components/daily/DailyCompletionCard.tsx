@@ -1,6 +1,6 @@
 "use client";
 
-import { CrosswordUpvote } from "@/components/daily/CrosswordUpvote";
+import { CrosswordVoteButtons } from "@/components/daily/CrosswordVoteButtons";
 import { ShareScore } from "@/components/games/ShareScore";
 import { SubmitScore } from "@/components/games/SubmitScore";
 import {
@@ -8,12 +8,7 @@ import {
   GAME_LABELS,
   type DailyGameId,
 } from "@/lib/dailyProgress";
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
+import { formatTime } from "@/lib/gameUtils";
 
 interface DailyCompletionCardProps {
   game: DailyGameId;
@@ -38,10 +33,11 @@ interface DailyCompletionCardProps {
   };
   /**
    * Optional puzzle identifier. When the active game is crossword and a
-   * stable id is available, the card surfaces an upvote button so the
-   * player can promote today's puzzle into the approved pool.
+   * stable id is available, the card surfaces a 👍 / 👎 vote pair so
+   * the player can promote today's puzzle into the approved pool or
+   * flag its clues for review.
    */
-  upvotePuzzleId?: string;
+  crosswordPuzzleId?: string;
 }
 
 /**
@@ -58,7 +54,7 @@ export function DailyCompletionCard({
   advanceLabel,
   justWon,
   secondaryAction,
-  upvotePuzzleId,
+  crosswordPuzzleId,
 }: DailyCompletionCardProps) {
   // If the puzzle was completed before this session and we don't know the
   // time (legacy "=1" flag), show a softer "already done" message instead.
@@ -116,11 +112,11 @@ export function DailyCompletionCard({
         </button>
       )}
 
-      {/* Crossword-only: surface an upvote control once the player has
+      {/* Crossword-only: surface up/down votes once the player has
           solved today's puzzle. Lives below the secondary action so the
           primary "go to next" CTA is still the visual anchor. */}
-      {game === "crossword" && upvotePuzzleId && !unknownTime && (
-        <CrosswordUpvote puzzleId={upvotePuzzleId} />
+      {game === "crossword" && crosswordPuzzleId && !unknownTime && (
+        <CrosswordVoteButtons puzzleId={crosswordPuzzleId} />
       )}
     </div>
   );

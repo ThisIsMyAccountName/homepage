@@ -23,6 +23,8 @@ import { fillGrid, findSlots } from "./fill";
 import clueBankData from "./data/crossword-clues.json";
 import {
   ALL_SHAPES,
+  FREEFORM_MAX_DIM,
+  FREEFORM_MIN_DIM,
   SHAPE_DIMS,
   type BlackMask,
   type ClueBank,
@@ -31,9 +33,11 @@ import {
   type ShapeKey,
 } from "./types";
 
-/** Min / max dimensions the freeform (game-section) generator supports. */
-export const FREEFORM_MIN_DIM = 3;
-export const FREEFORM_MAX_DIM = 7;
+// FREEFORM_MIN_DIM / FREEFORM_MAX_DIM live in `./types` so UI code can pull
+// them statically without making the clue bank reachable from the daily
+// bundle. Re-export here so any historical callers that imported them
+// from this module keep working.
+export { FREEFORM_MIN_DIM, FREEFORM_MAX_DIM };
 
 const clueBank = clueBankData as ClueBank;
 

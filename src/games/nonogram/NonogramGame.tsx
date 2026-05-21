@@ -17,6 +17,7 @@ import { logCompletion, getCompletedNonograms, clearCompletedNonograms, type Com
 import { GameTabs } from "@/components/games/GameTabs";
 import { GameHistory, type HistoryEntry } from "@/components/games/GameHistory";
 import { ConfirmDialog } from "@/components/games/ConfirmDialog";
+import { formatTime } from "@/lib/gameUtils";
 
 const SIZES: { rows: number; cols: number; label: string; cellSize: number }[] =
   [
@@ -24,12 +25,6 @@ const SIZES: { rows: number; cols: number; label: string; cellSize: number }[] =
     { rows: 7, cols: 7, label: "7×7", cellSize: 36 },
     { rows: 10, cols: 10, label: "10×10", cellSize: 32 },
   ];
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
 
 function buildShareText(puzzle: NonogramPuzzle, time: number, errors: number): string {
   const rows = puzzle.solution

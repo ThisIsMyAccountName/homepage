@@ -20,32 +20,45 @@ import { ClueBanner } from "@/games/crossword/ClueBanner";
 import { ClueList } from "@/games/crossword/ClueList";
 import { CrosswordBoard, type Selection } from "@/games/crossword/CrosswordBoard";
 import {
-  FREEFORM_MAX_DIM,
-  FREEFORM_MIN_DIM,
-  clueBankSize,
-  generateCrosswordForDims,
-} from "@/games/crossword/generator";
+  emptyGridFor,
+  gridHasProgress,
+  isCorrect,
+  isFilled,
+} from "@/games/crossword/gridUtils";
+import { logCompletion } from "@/games/crossword/history";
 import {
   clearFreeformSession,
   loadFreeformSession,
   saveFreeformSession,
 } from "@/games/crossword/session";
-import type { Direction, Entry, Puzzle } from "@/games/crossword/types";
+import { computePuzzleId } from "@/games/crossword/storedPuzzle";
+import {
+  FREEFORM_MAX_DIM,
+  FREEFORM_MIN_DIM,
+  type Direction,
+  type Entry,
+  type Puzzle,
+} from "@/games/crossword/types";
+import { formatTime } from "@/lib/gameUtils";
 import { useBoardSize } from "@/lib/useBoardSize";
 import { ConfirmDialog } from "@/components/games/ConfirmDialog";
+import { CrosswordVoteButtons } from "@/components/daily/CrosswordVoteButtons";
 
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
-
-function emptyGridFor(puzzle: Puzzle): string[][] {
-  return Array.from({ length: puzzle.rows }, (_, r) =>
-    Array.from({ length: puzzle.cols }, (_, c) =>
-      puzzle.black[r][c] ? "#" : "."
-    )
-  );
+/**
+ * The generator + 2.4 MB clue bank are heavy — the daily route never needs
+ * them (it fetches from `/api/crossword/daily`), so they're behind a
+ * dynamic import here. The promise is cached at module scope, so the first
+ * call pays the chunk-fetch cost (~50–100 ms, hidden behind the
+ * "Generating…" spinner the UI already shows) and subsequent calls resolve
+ * synchronously to the same module ref.
+ */
+type GeneratorMod = typeof import("@/games/crossword/generator");
+let generatorPromise: Promise<GeneratorMod> | null = null;
+function loadGenerator(): Promise<GeneratorMod> {
+  if (!generatorPromise) {
+    generatorPromise = import("@/games/crossword/generator");
+  }
+  return generatorPromise;
 }
 
 function initialSelection(puzzle: Puzzle): Selection {
@@ -58,35 +71,6 @@ function initialSelection(puzzle: Puzzle): Selection {
   };
 }
 
-function isCorrect(grid: string[][], solution: string[][]): boolean {
-  for (let r = 0; r < grid.length; r++) {
-    for (let c = 0; c < grid[r].length; c++) {
-      if (solution[r][c] === "#") continue;
-      if (grid[r][c] !== solution[r][c]) return false;
-    }
-  }
-  return true;
-}
-
-function isFilled(grid: string[][]): boolean {
-  for (const row of grid) {
-    for (const ch of row) {
-      if (ch === ".") return false;
-    }
-  }
-  return true;
-}
-
-/** Returns true iff any white cell in `grid` has been filled with a letter. */
-function gridHasProgress(grid: string[][]): boolean {
-  for (const row of grid) {
-    for (const ch of row) {
-      if (ch !== "." && ch !== "#") return true;
-    }
-  }
-  return false;
-}
-
 interface GameState {
   puzzle: Puzzle;
   grid: string[][];
@@ -96,8 +80,14 @@ interface GameState {
 
 /** Try the requested dims; if the bank can't fill them, retry with a few
  *  seeds before giving up so the user isn't sent to the error path for
- *  a transient solver miss. */
-function buildGame(rows: number, cols: number): GameState | null {
+ *  a transient solver miss. Async because the generator is lazy-loaded;
+ *  every caller already shows the "Generating…" spinner across the
+ *  setTimeout(0) hop, so the dynamic-import latency is hidden there. */
+async function buildGame(
+  rows: number,
+  cols: number
+): Promise<GameState | null> {
+  const { generateCrosswordForDims } = await loadGenerator();
   for (let attempt = 0; attempt < 6; attempt++) {
     const seed = Math.floor(Math.random() * 2 ** 31);
     const puzzle = generateCrosswordForDims(rows, cols, seed);
@@ -113,12 +103,13 @@ function buildGame(rows: number, cols: number): GameState | null {
 }
 
 /** Rebuild a saved puzzle from its seed and restore the player's grid. */
-function buildGameFromSeed(
+async function buildGameFromSeed(
   rows: number,
   cols: number,
   seed: number,
   savedGrid: string[][]
-): GameState | null {
+): Promise<GameState | null> {
+  const { generateCrosswordForDims } = await loadGenerator();
   const puzzle = generateCrosswordForDims(rows, cols, seed);
   if (!puzzle) return null;
   return {
@@ -135,7 +126,12 @@ const DIM_OPTIONS = Array.from(
 );
 
 export function CrosswordGame() {
-  const bankEmpty = clueBankSize() === 0;
+  // `null` = generator hasn't loaded yet, `true` = loaded but the bank is
+  // empty (dev hasn't run `scripts/generate-clue-bank.mjs`), `false` =
+  // ready to generate. Used to gate the saved-session restore + the
+  // "coming soon" empty-bank UI without making the bank reachable at
+  // module load.
+  const [bankEmpty, setBankEmpty] = useState<boolean | null>(null);
 
   const [rows, setRows] = useState<number>(() => loadFreeformSession()?.rows ?? 5);
   const [cols, setCols] = useState<number>(() => loadFreeformSession()?.cols ?? 5);
@@ -167,24 +163,28 @@ export function CrosswordGame() {
       setGenerating(true);
       setGenerationFailed(false);
       // Defer to next tick so the "generating" spinner can paint before
-      // the (potentially expensive) fill solver hogs the main thread.
+      // the (potentially expensive) fill solver hogs the main thread. The
+      // dynamic-import for the generator chunk also resolves inside this
+      // hop on the first call — both costs are masked by the same spinner.
       setTimeout(() => {
-        const next = buildGame(nextRows, nextCols);
-        if (!next) {
-          setGenerationFailed(true);
+        void (async () => {
+          const next = await buildGame(nextRows, nextCols);
+          if (!next) {
+            setGenerationFailed(true);
+            setGenerating(false);
+            return;
+          }
+          clearFreeformSession();
+          setGame(next);
+          setErrors(new Set());
+          setCorrects(new Set());
+          setRevealed(new Set());
+          setErrorCount(0);
+          setTimer(0);
+          setWon(false);
+          setPaused(true);
           setGenerating(false);
-          return;
-        }
-        clearFreeformSession();
-        setGame(next);
-        setErrors(new Set());
-        setCorrects(new Set());
-        setRevealed(new Set());
-        setErrorCount(0);
-        setTimer(0);
-        setWon(false);
-        setPaused(true);
-        setGenerating(false);
+        })();
       }, 0);
     },
     []
@@ -207,8 +207,13 @@ export function CrosswordGame() {
   // wait several seconds on the procedural fill before anything could
   // render; gating on a click keeps the page snappy and matches the
   // existing UI prompt ("Pick a size to start").
+  //
+  // First mount also drives the generator dynamic import: whether or not
+  // there's a saved session, we resolve the chunk here so `bankEmpty`
+  // flips to a real boolean and the "coming soon" placeholder can fire if
+  // the dev hasn't generated the clue bank yet.
   useEffect(() => {
-    if (initRef.current || bankEmpty) return;
+    if (initRef.current) return;
     initRef.current = true;
     const saved = loadFreeformSession();
     if (saved) {
@@ -216,30 +221,45 @@ export function CrosswordGame() {
       // Defer the regeneration so the "Generating…" placeholder paints
       // before the (potentially expensive) fill solver hogs the main thread.
       setTimeout(() => {
-        const next = buildGameFromSeed(
-          saved.rows,
-          saved.cols,
-          saved.seed,
-          saved.grid
-        );
-        if (next) {
-          setGame(next);
-          setTimer(saved.timer);
-          setErrorCount(saved.errorCount);
-          setRevealed(saved.revealed);
-        } else {
-          // Seed couldn't be regenerated (clue bank changed, etc.). Drop
-          // the stale session and stay on the empty state — the player
-          // can pick dims and click New puzzle to roll a fresh one.
-          clearFreeformSession();
-        }
-        setGenerating(false);
+        void (async () => {
+          const mod = await loadGenerator();
+          const empty = mod.clueBankSize() === 0;
+          setBankEmpty(empty);
+          if (empty) {
+            // Stale session predates the (now-missing) clue bank — drop it
+            // and stay on the "coming soon" empty-state path.
+            clearFreeformSession();
+            setGenerating(false);
+            return;
+          }
+          const next = await buildGameFromSeed(
+            saved.rows,
+            saved.cols,
+            saved.seed,
+            saved.grid
+          );
+          if (next) {
+            setGame(next);
+            setTimer(saved.timer);
+            setErrorCount(saved.errorCount);
+            setRevealed(saved.revealed);
+          } else {
+            // Seed couldn't be regenerated (clue bank changed, etc.). Drop
+            // the stale session and stay on the empty state — the player
+            // can pick dims and click New puzzle to roll a fresh one.
+            clearFreeformSession();
+          }
+          setGenerating(false);
+        })();
       }, 0);
+    } else {
+      // No saved session — still preload the generator so `bankEmpty`
+      // resolves before the user clicks "New puzzle". Cheap and hidden.
+      void loadGenerator().then((mod) => {
+        setBankEmpty(mod.clueBankSize() === 0);
+      });
     }
-    // No saved session — leave `game` as null. The empty-state UI prompts
-    // "Pick a size to start"; the player triggers generation via the
-    // "New puzzle" button so opening the page never blocks on the solver.
-  }, [bankEmpty]);
+  }, []);
 
   // Timer
   useEffect(() => {
@@ -459,6 +479,39 @@ export function CrosswordGame() {
     activeEntryRef.current = activeEntry;
   }, [activeEntry]);
 
+  // Stable id for the currently-loaded freeform puzzle. Computed only
+  // after a win (the vote control is hidden until then), so we avoid
+  // hashing the grid on every keystroke. `null` when there's no game.
+  const solvedPuzzleId = useMemo<string | null>(() => {
+    if (!game || !won) return null;
+    return computePuzzleId(
+      game.puzzle.rows,
+      game.puzzle.cols,
+      game.puzzle.solution,
+      game.puzzle.black
+    );
+  }, [game, won]);
+
+  // Log to the per-game history once per win, matching the convention
+  // every other game's `history.ts` uses. `solvedPuzzleId` already gates
+  // on `won && game`, and resets to null when the next "New puzzle"
+  // clears the win state — so this effect fires exactly once per solved
+  // puzzle, no extra guard needed.
+  const loggedIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!solvedPuzzleId || !game) return;
+    if (loggedIdRef.current === solvedPuzzleId) return;
+    loggedIdRef.current = solvedPuzzleId;
+    logCompletion({
+      id: solvedPuzzleId,
+      rows: game.puzzle.rows,
+      cols: game.puzzle.cols,
+      shape: game.puzzle.shape,
+      time: timer,
+      date: new Date().toISOString(),
+    });
+  }, [solvedPuzzleId, game, timer]);
+
   const flipDirection = useCallback(() => {
     setGame((g) =>
       g
@@ -500,7 +553,7 @@ export function CrosswordGame() {
 
   /* --------------------------- Render branches --------------------------- */
 
-  if (bankEmpty) {
+  if (bankEmpty === true) {
     return (
       <div className="flex flex-col items-center gap-3 p-6 text-center">
         <p className="text-sm font-medium text-foreground">
@@ -712,6 +765,18 @@ export function CrosswordGame() {
                 Reveal word
               </button>
             </div>
+          )}
+
+          {/* Post-solve curation: same up/down vote pair the daily
+              completion card uses. The freeform puzzle isn't in any
+              pool, so we pass the full puzzle JSON inline; the
+              endpoints verify the computed id matches before
+              accepting. */}
+          {game && won && solvedPuzzleId && (
+            <CrosswordVoteButtons
+              puzzleId={solvedPuzzleId}
+              puzzle={game.puzzle}
+            />
           )}
         </div>
       </div>

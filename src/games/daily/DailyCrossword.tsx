@@ -21,11 +21,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getTodayKey } from "@/lib/daily";
+import { formatTime } from "@/lib/gameUtils";
 import { useBoardSize } from "@/lib/useBoardSize";
 import { ClueBanner } from "@/games/crossword/ClueBanner";
 import { ClueList } from "@/games/crossword/ClueList";
 import { CrosswordBoard, type Selection } from "@/games/crossword/CrosswordBoard";
 import { fetchDailyCrossword } from "@/games/crossword/dailyFetch";
+import {
+  emptyGridFor,
+  isCorrect,
+  isFilled,
+} from "@/games/crossword/gridUtils";
+import { logCompletion } from "@/games/crossword/history";
 import {
   clearDailySession,
   loadDailySession,
@@ -33,21 +40,6 @@ import {
 } from "@/games/crossword/session";
 import type { StoredPuzzle } from "@/games/crossword/storedPuzzle";
 import type { Direction, Entry } from "@/games/crossword/types";
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
-
-/** Build the initial all-empty grid for `puzzle`. */
-function emptyGridFor(puzzle: StoredPuzzle): string[][] {
-  return Array.from({ length: puzzle.rows }, (_, r) =>
-    Array.from({ length: puzzle.cols }, (_, c) =>
-      puzzle.black[r][c] ? "#" : "."
-    )
-  );
-}
 
 function initialSelection(puzzle: StoredPuzzle): Selection {
   const first =
@@ -60,27 +52,6 @@ function initialSelection(puzzle: StoredPuzzle): Selection {
     col: first.cells[0].col,
     direction: first.direction,
   };
-}
-
-/** True iff every white cell matches the solution. */
-function isCorrect(grid: string[][], solution: string[][]): boolean {
-  for (let r = 0; r < grid.length; r++) {
-    for (let c = 0; c < grid[r].length; c++) {
-      if (solution[r][c] === "#") continue;
-      if (grid[r][c] !== solution[r][c]) return false;
-    }
-  }
-  return true;
-}
-
-/** True iff every white cell has a letter (correct or not). */
-function isFilled(grid: string[][]): boolean {
-  for (const row of grid) {
-    for (const ch of row) {
-      if (ch === ".") return false;
-    }
-  }
-  return true;
 }
 
 interface DailyCrosswordProps {
@@ -272,6 +243,18 @@ function DailyCrosswordInner({ puzzle, todayKey, onComplete }: InnerProps) {
         completedRef.current = true;
         setWon(true);
         clearDailySession(todayKey);
+        // Mirror the per-game `history.ts` convention used by sudoku /
+        // nonogram / x-coloring / flow so a future "all-games completed"
+        // view has uniform data to read from.
+        logCompletion({
+          id: puzzleId,
+          rows: puzzle.rows,
+          cols: puzzle.cols,
+          shape: puzzle.shape,
+          time: timer,
+          date: new Date().toISOString(),
+          puzzleDate: todayKey,
+        });
         onComplete(timer, errorCount, puzzleId);
       }
     },

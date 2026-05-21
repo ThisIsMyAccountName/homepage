@@ -109,3 +109,12 @@ export interface Puzzle {
 
 /** Persisted clue bank shape on disk (`data/crossword-clues.json`). */
 export type ClueBank = Record<string, string[]>;
+
+/**
+ * Min / max dimensions the freeform (game-section) generator supports.
+ * Exported from `types.ts` rather than `generator.ts` so UI code (selects,
+ * dim option arrays) can import these without dragging in the 2.4 MB clue
+ * bank — the generator itself remains lazy-loaded.
+ */
+export const FREEFORM_MIN_DIM = 3;
+export const FREEFORM_MAX_DIM = 7;

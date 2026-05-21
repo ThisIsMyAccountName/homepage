@@ -11,16 +11,11 @@ import {
 } from "@/games/x-coloring/session";
 import { logCompletion } from "@/games/x-coloring/history";
 import { GraphBoard } from "@/components/games/GraphBoard";
+import { formatTime } from "@/lib/gameUtils";
 import { useBoardSize, DAILY_BOARD } from "@/lib/useBoardSize";
 
 /** Daily puzzle is always Hard so everyone faces the same full-featured puzzle. */
 const DAILY_DIFFICULTY = "hard" as const;
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
 
 function emptyColoring(n: number): number[] {
   return new Array<number>(n).fill(-1);

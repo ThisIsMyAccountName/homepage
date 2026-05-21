@@ -22,7 +22,6 @@
  */
 
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
 import path from "path";
 import { getDailySeed } from "@/lib/daily";
 import bundledPool from "@/games/crossword/data/crossword-pool.json";
@@ -30,6 +29,7 @@ import {
   publicView,
   type StoredPuzzle,
 } from "@/games/crossword/storedPuzzle";
+import { readJsonFile } from "@/lib/apiUtils";
 
 const APPROVED_FILE = path.join(
   process.cwd(),
@@ -37,20 +37,8 @@ const APPROVED_FILE = path.join(
   "crossword-approved.json"
 );
 
-/** Read the mutable approved pool, returning `[]` if absent or malformed. */
-async function readApproved(): Promise<StoredPuzzle[]> {
-  try {
-    const raw = await fs.readFile(APPROVED_FILE, "utf-8");
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed as StoredPuzzle[];
-    return [];
-  } catch {
-    return [];
-  }
-}
-
 export async function GET() {
-  const approved = await readApproved();
+  const approved = await readJsonFile<StoredPuzzle[]>(APPROVED_FILE, []);
   const pool: StoredPuzzle[] =
     approved.length > 0 ? approved : (bundledPool as StoredPuzzle[]);
 
