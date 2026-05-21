@@ -22,7 +22,7 @@
  */
 
 import { createSeededRng } from "@/lib/daily";
-import { fillGrid } from "./fill";
+import { fillGrid, findSlots } from "./fill";
 import patternsData from "./data/crossword-patterns.json";
 import clueBankData from "./data/crossword-clues.json";
 import {
@@ -110,13 +110,28 @@ function emptyMask(rows: number, cols: number): BlackMask {
 }
 
 /**
- * Chebyshev-style distance from `(r, c)` to the nearest grid edge.
- * Edge cells return 0; cells one step in return 1; etc. Used to weight
- * the random black-square placement so blacks cluster near the perimeter
- * instead of slicing through the middle of the grid.
+ * Length of the current white run through `(r, c)` in whichever direction
+ * (across or down) is longer. Precondition: `mask[r][c]` is white.
+ *
+ * Used to bias black-square placement toward cells sitting in the longest
+ * uninterrupted runs — placing a black there shortens the worst-case slot
+ * length first, which is exactly what a small clue bank with sparse 6+
+ * letter buckets needs to stay solvable.
  */
-function edgeDistance(r: number, c: number, rows: number, cols: number): number {
-  return Math.min(r, rows - 1 - r, c, cols - 1 - c);
+function longestRunThrough(
+  mask: BlackMask,
+  rows: number,
+  cols: number,
+  r: number,
+  c: number
+): number {
+  let aLen = 1;
+  for (let cc = c - 1; cc >= 0 && !mask[r][cc]; cc--) aLen++;
+  for (let cc = c + 1; cc < cols && !mask[r][cc]; cc++) aLen++;
+  let dLen = 1;
+  for (let rr = r - 1; rr >= 0 && !mask[rr][c]; rr--) dLen++;
+  for (let rr = r + 1; rr < rows && !mask[rr][c]; rr++) dLen++;
+  return aLen > dLen ? aLen : dLen;
 }
 
 /**
@@ -183,9 +198,10 @@ function whiteIsConnected(mask: BlackMask, rows: number, cols: number): boolean 
 /**
  * Build one procedurally-placed black-square mask. The placement is fully
  * unconstrained by symmetry — symmetry was hindering the solver too much
- * given the small word bank. To still get visually pleasing layouts we
- * weight each candidate cell by its proximity to the grid edge so blacks
- * concentrate around the perimeter instead of slicing through the middle.
+ * given the small word bank. Cells are weighted by the length of the
+ * longest current white run they sit in, so blacks preferentially break
+ * up long uninterrupted slots first; that's what keeps a bank short on
+ * 6+ letter words solvable on bigger grids.
  *
  * Each pick is validated against the same two invariants:
  *   • no resulting white run is shorter than `MIN_ENTRY_LEN`;
@@ -220,12 +236,13 @@ function countBlacks(mask: BlackMask): number {
  * Returns `true` on success, `false` if no further valid placement is
  * reachable from the current state.
  *
- * The cell choice is randomised but edge-biased: each candidate gets a
- * score of `edgeDistance + rng() * 1.5`, and we try cells in ascending
- * order. The 1.5-unit jitter is just enough that cells *at the same*
- * distance still vary in pick order between seeds, while perimeter
- * cells almost always get a shot before interior ones. The result reads
- * as "blanks framing the puzzle" rather than "blanks bisecting it".
+ * The cell choice is randomised but longest-run-biased: each candidate
+ * gets a score of `-longestRunThrough + rng() * 1.5` and we try cells in
+ * ascending order. The 1.5-unit jitter lets cells inside runs of the
+ * same length still vary in pick order between seeds, while cells in
+ * the longest current run almost always get a shot first. The result is
+ * that blacks bisect the worst slots rather than just framing the grid —
+ * crucial when the bank is thin on 6+ letter words.
  */
 function addRandomValidBlack(
   mask: BlackMask,
@@ -237,7 +254,7 @@ function addRandomValidBlack(
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (mask[r][c]) continue;
-      const score = edgeDistance(r, c, rows, cols) + rng() * 1.5;
+      const score = -longestRunThrough(mask, rows, cols, r, c) + rng() * 1.5;
       candidates.push({ r, c, score });
     }
   }
@@ -254,6 +271,36 @@ function addRandomValidBlack(
     mask[r][c] = false;
   }
   return false;
+}
+
+/**
+ * Necessary-condition feasibility check. For each length L that appears in
+ * the mask's slot enumeration, we need at least as many distinct bank
+ * entries of length L as we have slots of that length (since each slot
+ * must be a unique word). If the bank can't even meet that bar, the fill
+ * solver is guaranteed to fail — skip the 60k-step attempt and let the
+ * adaptive loop grow the mask instead.
+ *
+ * This is a necessary, not sufficient, condition: even when the counts
+ * line up, the intersection constraints can still kill the fill. That's
+ * what the actual solver is for. The check just cheaply prunes the
+ * obviously-impossible cases.
+ */
+function isMaskFeasible(
+  rows: number,
+  cols: number,
+  mask: BlackMask
+): boolean {
+  const slots = findSlots(rows, cols, mask);
+  if (slots.length === 0) return false;
+  const slotsByLen: Record<number, number> = {};
+  for (const s of slots) slotsByLen[s.length] = (slotsByLen[s.length] ?? 0) + 1;
+  for (const [lenStr, count] of Object.entries(slotsByLen)) {
+    const len = Number(lenStr);
+    const have = bankByLen[len]?.length ?? 0;
+    if (have < count) return false;
+  }
+  return true;
 }
 
 /**
@@ -277,7 +324,7 @@ function generateAdaptivePuzzle(
   initialTarget: number,
   rng: () => number,
   fillBudget: number,
-  maxBlackRatio = 0.45
+  maxBlackRatio = 0.55
 ): Puzzle | null {
   const mask = generateProceduralMask(rows, cols, initialTarget, rng);
   const maxBlacks = Math.floor(rows * cols * maxBlackRatio);
@@ -285,12 +332,17 @@ function generateAdaptivePuzzle(
   const MAX_RETRIES = rows * cols;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const filled = fillGrid(rows, cols, mask, bankByLen, rng, {
-      stepBudget: fillBudget,
-    });
-    if (filled) {
-      const puzzle = buildPuzzle(shape, rows, cols, mask, filled, rng);
-      if (puzzle) return puzzle;
+    // Cheap necessary-condition prune: don't burn the fill solver's step
+    // budget on masks whose slot-length distribution the bank obviously
+    // can't cover. Saves several seconds on harder shapes.
+    if (isMaskFeasible(rows, cols, mask)) {
+      const filled = fillGrid(rows, cols, mask, bankByLen, rng, {
+        stepBudget: fillBudget,
+      });
+      if (filled) {
+        const puzzle = buildPuzzle(shape, rows, cols, mask, filled, rng);
+        if (puzzle) return puzzle;
+      }
     }
     if (countBlacks(mask) >= maxBlacks) return null;
     if (!addRandomValidBlack(mask, rows, cols, rng)) return null;
@@ -541,7 +593,10 @@ export function generateCrosswordForDims(
   const [lo, hi] = blackTargetRangeForDims(rows, cols);
   const shape = `${rows}x${cols}`;
 
-  const ADAPTIVE_ATTEMPTS = 10;
+  // 15 attempts (up from 10) — each attempt is cheaper now that
+  // `isMaskFeasible` short-circuits obviously-unfillable masks before they
+  // hit the 60k-step solver, so we can afford to roll the dice more.
+  const ADAPTIVE_ATTEMPTS = 15;
   const FILL_BUDGET = 60000;
   for (let attempt = 0; attempt < ADAPTIVE_ATTEMPTS; attempt++) {
     const startTarget = lo + Math.floor(rng() * (hi - lo + 1));

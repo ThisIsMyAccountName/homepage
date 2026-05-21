@@ -95,3 +95,89 @@ export function clearDailySession(todayKey: string): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(dailyKey(todayKey));
 }
+
+/* ─── Freeform session ───────────────────────────────────────────────────── */
+
+const FREEFORM_KEY = "crossword-freeform-session";
+
+interface FreeformSession {
+  rows: number;
+  cols: number;
+  seed: number;
+  /** Flat row-major: rows*cols chars, one of `.`, `#`, or `A`…`Z`. */
+  letters: string;
+  timer: number;
+  errorCount: number;
+  /** Array of "r,c" keys for cells the player revealed. */
+  revealed: string[];
+}
+
+export function saveFreeformSession(
+  rows: number,
+  cols: number,
+  seed: number,
+  grid: string[][],
+  timer: number,
+  errorCount: number,
+  revealed: Set<string>
+): void {
+  if (typeof window === "undefined") return;
+  if (grid.length === 0) return;
+  const data: FreeformSession = {
+    rows,
+    cols,
+    seed,
+    letters: flatten(grid),
+    timer,
+    errorCount,
+    revealed: Array.from(revealed),
+  };
+  try {
+    window.localStorage.setItem(FREEFORM_KEY, JSON.stringify(data));
+  } catch {
+    // quota / private mode — silently drop
+  }
+}
+
+export function loadFreeformSession(): {
+  rows: number;
+  cols: number;
+  seed: number;
+  grid: string[][];
+  timer: number;
+  errorCount: number;
+  revealed: Set<string>;
+} | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(FREEFORM_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as FreeformSession;
+    if (
+      typeof data.rows !== "number" ||
+      typeof data.cols !== "number" ||
+      typeof data.seed !== "number" ||
+      typeof data.letters !== "string" ||
+      !Array.isArray(data.revealed)
+    )
+      return null;
+    const grid = inflate(data.letters, data.rows, data.cols);
+    if (!grid) return null;
+    return {
+      rows: data.rows,
+      cols: data.cols,
+      seed: data.seed,
+      grid,
+      timer: typeof data.timer === "number" ? data.timer : 0,
+      errorCount: typeof data.errorCount === "number" ? data.errorCount : 0,
+      revealed: new Set(data.revealed),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function clearFreeformSession(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(FREEFORM_KEY);
+}

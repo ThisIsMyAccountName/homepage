@@ -25,6 +25,11 @@ import {
   clueBankSize,
   generateCrosswordForDims,
 } from "@/games/crossword/generator";
+import {
+  clearFreeformSession,
+  loadFreeformSession,
+  saveFreeformSession,
+} from "@/games/crossword/session";
 import type { Direction, Entry, Puzzle } from "@/games/crossword/types";
 import { useBoardSize } from "@/lib/useBoardSize";
 import { ConfirmDialog } from "@/components/games/ConfirmDialog";
@@ -86,6 +91,7 @@ interface GameState {
   puzzle: Puzzle;
   grid: string[][];
   selection: Selection;
+  seed: number;
 }
 
 /** Try the requested dims; if the bank can't fill them, retry with a few
@@ -100,9 +106,27 @@ function buildGame(rows: number, cols: number): GameState | null {
       puzzle,
       grid: emptyGridFor(puzzle),
       selection: initialSelection(puzzle),
+      seed,
     };
   }
   return null;
+}
+
+/** Rebuild a saved puzzle from its seed and restore the player's grid. */
+function buildGameFromSeed(
+  rows: number,
+  cols: number,
+  seed: number,
+  savedGrid: string[][]
+): GameState | null {
+  const puzzle = generateCrosswordForDims(rows, cols, seed);
+  if (!puzzle) return null;
+  return {
+    puzzle,
+    grid: savedGrid,
+    selection: initialSelection(puzzle),
+    seed,
+  };
 }
 
 const DIM_OPTIONS = Array.from(
@@ -113,8 +137,8 @@ const DIM_OPTIONS = Array.from(
 export function CrosswordGame() {
   const bankEmpty = clueBankSize() === 0;
 
-  const [rows, setRows] = useState<number>(5);
-  const [cols, setCols] = useState<number>(5);
+  const [rows, setRows] = useState<number>(() => loadFreeformSession()?.rows ?? 5);
+  const [cols, setCols] = useState<number>(() => loadFreeformSession()?.cols ?? 5);
   const [game, setGame] = useState<GameState | null>(null);
   const [errors, setErrors] = useState<Set<string>>(() => new Set());
   // Cells flagged as right by the most recent Check pass — rendered green
@@ -151,6 +175,7 @@ export function CrosswordGame() {
           setGenerating(false);
           return;
         }
+        clearFreeformSession();
         setGame(next);
         setErrors(new Set());
         setCorrects(new Set());
@@ -176,11 +201,31 @@ export function CrosswordGame() {
     startNewPuzzle(rows, cols);
   }, [game, won, rows, cols, startNewPuzzle]);
 
-  // First-mount initialization.
+  // First-mount initialization — try to restore a saved session, otherwise
+  // generate a fresh puzzle.
   useEffect(() => {
     if (initRef.current || bankEmpty) return;
     initRef.current = true;
-    startNewPuzzle(rows, cols);
+    const saved = loadFreeformSession();
+    if (saved) {
+      setGenerating(true);
+      setTimeout(() => {
+        const next = buildGameFromSeed(saved.rows, saved.cols, saved.seed, saved.grid);
+        if (next) {
+          setGame(next);
+          setTimer(saved.timer);
+          setErrorCount(saved.errorCount);
+          setRevealed(saved.revealed);
+          setGenerating(false);
+        } else {
+          // Seed couldn't be regenerated — start fresh.
+          clearFreeformSession();
+          startNewPuzzle(rows, cols);
+        }
+      }, 0);
+    } else {
+      startNewPuzzle(rows, cols);
+    }
   }, [bankEmpty, rows, cols, startNewPuzzle]);
 
   // Timer
@@ -192,6 +237,20 @@ export function CrosswordGame() {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [paused, won, game]);
+
+  // Persist on every meaningful change so a refresh restores exactly.
+  useEffect(() => {
+    if (!game || won) return;
+    saveFreeformSession(
+      game.puzzle.rows,
+      game.puzzle.cols,
+      game.seed,
+      game.grid,
+      timer,
+      errorCount,
+      revealed
+    );
+  }, [game, timer, errorCount, revealed, won]);
 
   // Adapt board cell size to the right column's width / viewport height.
   // The clue sidebar takes ~240px on `lg+`, so the board column gets the
@@ -253,6 +312,7 @@ export function CrosswordGame() {
         isCorrect(next, game.puzzle.solution)
       ) {
         completedRef.current = true;
+        clearFreeformSession();
         setWon(true);
       }
     },
@@ -327,6 +387,7 @@ export function CrosswordGame() {
         isCorrect(next, game.puzzle.solution)
       ) {
         completedRef.current = true;
+        clearFreeformSession();
         setWon(true);
       }
     },
