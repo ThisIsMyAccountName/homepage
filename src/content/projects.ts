@@ -27,7 +27,7 @@ export const projects: Project[] = [
     description:
       "This site. A modular personal homepage built with Next.js, featuring project showcases, hosted mini games (Sudoku, etc.), file hosting, and external links. Dark minimalist design.",
     tags: ["Next.js", "TypeScript", "Tailwind CSS", "Docker"],
-    images: ["/images/placeholder.svg"],
+    images: ["/images/homepage.png"],
     links: {
       github: gh("homepage"),
       live: SITE_URL,
