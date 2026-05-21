@@ -15,9 +15,9 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..", "src", "games", "crossword", "data");
-const patterns = JSON.parse(
-  readFileSync(join(ROOT, "crossword-patterns.json"), "utf-8")
-);
+// The symmetric pattern library was removed when the daily moved to the
+// server-stored pool; the procedural generator no longer has any static
+// fallback. Tests below only exercise the procedural path.
 const bank = JSON.parse(readFileSync(join(ROOT, "crossword-clues.json"), "utf-8"));
 
 // Must match src/games/crossword/types.ts exactly.
@@ -294,11 +294,6 @@ function tryShape(shape, rng) {
       if (countBlacks(mask) >= MAX_BLACKS) break;
       if (!addRandomValidBlack(mask, rows, cols, rng)) break;
     }
-  }
-  // Static-pattern fallback (kept so the script still tracks the runtime).
-  for (const mask of shuffle([...(patterns[shape] ?? [])], rng)) {
-    const g = fillGrid(rows, cols, mask, bankByLen, rng);
-    if (g) return { grid: g, mask, blacks: countBlacks(mask) };
   }
   return null;
 }

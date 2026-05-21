@@ -3,21 +3,25 @@
 /**
  * Read-only view of today's solved crossword grid. Rendered after a
  * player has completed the daily and asked to "view the solution" from
- * the completion card — the puzzle itself is regenerated locally from
- * the daily seed (deterministic), so we don't need to persist the
- * solution anywhere.
+ * the completion card.
+ *
+ * The puzzle is fetched from `/api/crossword/daily` (same server-stored
+ * pool as `DailyCrossword`); the in-mount `sessionStorage` cache the
+ * fetcher maintains means this typically loads instantly because the
+ * player already has the puzzle cached from playing it.
  *
  * The grid is sized identically to `DailyCrossword` so the visual
  * footprint stays consistent across the two states.
  */
 
-import { useCallback, useMemo, useState } from "react";
-import { getDailySeed } from "@/lib/daily";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getTodayKey } from "@/lib/daily";
 import { ClueBanner } from "@/games/crossword/ClueBanner";
 import { ClueList } from "@/games/crossword/ClueList";
 import { CrosswordBoard, type Selection } from "@/games/crossword/CrosswordBoard";
-import { generateCrosswordPuzzle } from "@/games/crossword/generator";
-import type { Direction, Entry, Puzzle } from "@/games/crossword/types";
+import { fetchDailyCrossword } from "@/games/crossword/dailyFetch";
+import type { StoredPuzzle } from "@/games/crossword/storedPuzzle";
+import type { Direction, Entry } from "@/games/crossword/types";
 import { useBoardSize } from "@/lib/useBoardSize";
 
 interface DailyCrosswordSolutionProps {
@@ -25,7 +29,7 @@ interface DailyCrosswordSolutionProps {
   onBack: () => void;
 }
 
-function initialSelection(puzzle: Puzzle): Selection {
+function initialSelection(puzzle: StoredPuzzle): Selection {
   const first = puzzle.entries.across[0] ?? puzzle.entries.down[0] ?? null;
   if (!first) return { row: 0, col: 0, direction: "across" };
   return {
@@ -38,12 +42,65 @@ function initialSelection(puzzle: Puzzle): Selection {
 export function DailyCrosswordSolution({
   onBack,
 }: DailyCrosswordSolutionProps) {
-  // Regenerate today's puzzle from the daily seed. Deterministic, so the
-  // solution shown here is exactly what the player just finished.
-  const puzzle = useMemo<Puzzle>(
-    () => generateCrosswordPuzzle(getDailySeed()),
-    []
-  );
+  const todayKey = getTodayKey();
+  const [puzzle, setPuzzle] = useState<StoredPuzzle | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    let cancelled = false;
+    fetchDailyCrossword(todayKey, ac.signal)
+      .then((res) => {
+        if (cancelled) return;
+        setPuzzle(res.puzzle);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setLoadError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [todayKey]);
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center gap-3 p-6 text-center">
+        <p className="text-sm font-medium text-foreground">
+          Couldn&apos;t load the solution.
+        </p>
+        <p className="max-w-sm text-xs text-muted">{loadError}</p>
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded border border-border bg-card px-2 py-1 font-mono text-xs text-muted transition-colors hover:text-foreground"
+        >
+          ← Back
+        </button>
+      </div>
+    );
+  }
+
+  if (!puzzle) {
+    return (
+      <div className="flex items-center justify-center p-8 text-sm text-muted">
+        Loading solution…
+      </div>
+    );
+  }
+
+  return <SolutionInner puzzle={puzzle} onBack={onBack} />;
+}
+
+function SolutionInner({
+  puzzle,
+  onBack,
+}: {
+  puzzle: StoredPuzzle;
+  onBack: () => void;
+}) {
   const [selection, setSelection] = useState<Selection>(() =>
     initialSelection(puzzle)
   );

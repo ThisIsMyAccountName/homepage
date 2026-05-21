@@ -67,14 +67,19 @@ const DailyCrosswordSolution = dynamic(
   { ssr: false, loading: () => GameLoader }
 );
 
-const GAME_COMPONENT: Record<
-  DailyGameId,
+/**
+ * Lookup for the games that share the simple `(time, errors)` completion
+ * signature. Crossword reports an extra `puzzleId` so it's rendered out
+ * of band below — keeping it out of this map preserves the strict type
+ * on the shared dispatcher.
+ */
+const SIMPLE_GAME_COMPONENT: Record<
+  Exclude<DailyGameId, "crossword">,
   React.ComponentType<{ onComplete: (time: number, errors: number) => void }>
 > = {
   sudoku: DailySudoku,
   nonogram: DailyNonogram,
   "x-coloring": DailyXColoring,
-  crossword: DailyCrossword,
 };
 
 type Step = DailyGameId | "recap";
@@ -109,6 +114,14 @@ export function DailyHub() {
   // finished. Resets if the active step changes.
   const [viewingCrosswordSolution, setViewingCrosswordSolution] =
     useState(false);
+  // Stable id of the crossword the player just solved. Surfaces the
+  // upvote button on the completion card; unset before the win, set on
+  // completion, persisted across this page-load only (a refresh re-loads
+  // the puzzle through the same fetcher and the upvote control's own
+  // localStorage cache keeps "already voted" sticky).
+  const [solvedCrosswordId, setSolvedCrosswordId] = useState<string | null>(
+    null
+  );
 
   const handleComplete = useCallback(
     (game: DailyGameId, time: number, errors: number) => {
@@ -122,6 +135,14 @@ export function DailyHub() {
       });
     },
     []
+  );
+
+  const handleCrosswordComplete = useCallback(
+    (time: number, errors: number, puzzleId: string) => {
+      handleComplete("crossword", time, errors);
+      setSolvedCrosswordId(puzzleId);
+    },
+    [handleComplete]
   );
 
   const advanceFrom = useCallback(
@@ -209,10 +230,17 @@ export function DailyHub() {
                       }
                     : undefined
                 }
+                upvotePuzzleId={
+                  active === "crossword" && solvedCrosswordId
+                    ? solvedCrosswordId
+                    : undefined
+                }
               />
             )
+          ) : active === "crossword" ? (
+            <DailyCrossword onComplete={handleCrosswordComplete} />
           ) : (
-            <ActiveGame
+            <SimpleActiveGame
               game={active}
               onComplete={(time, errors) => handleComplete(active, time, errors)}
             />
@@ -261,15 +289,18 @@ export function DailyHub() {
   );
 }
 
-/** Renders the actual playable game for the currently-active step. */
-function ActiveGame({
+/**
+ * Renders the playable game for any step *except* crossword (which is
+ * handled inline above because it needs the puzzle-id from `onComplete`).
+ */
+function SimpleActiveGame({
   game,
   onComplete,
 }: {
-  game: DailyGameId;
+  game: Exclude<DailyGameId, "crossword">;
   onComplete: (time: number, errors: number) => void;
 }) {
-  const Component = GAME_COMPONENT[game];
+  const Component = SIMPLE_GAME_COMPONENT[game];
   return <Component onComplete={onComplete} />;
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { CrosswordUpvote } from "@/components/daily/CrosswordUpvote";
 import { ShareScore } from "@/components/games/ShareScore";
 import { SubmitScore } from "@/components/games/SubmitScore";
 import {
@@ -35,6 +36,12 @@ interface DailyCompletionCardProps {
     label: string;
     onClick: () => void;
   };
+  /**
+   * Optional puzzle identifier. When the active game is crossword and a
+   * stable id is available, the card surfaces an upvote button so the
+   * player can promote today's puzzle into the approved pool.
+   */
+  upvotePuzzleId?: string;
 }
 
 /**
@@ -51,6 +58,7 @@ export function DailyCompletionCard({
   advanceLabel,
   justWon,
   secondaryAction,
+  upvotePuzzleId,
 }: DailyCompletionCardProps) {
   // If the puzzle was completed before this session and we don't know the
   // time (legacy "=1" flag), show a softer "already done" message instead.
@@ -106,6 +114,13 @@ export function DailyCompletionCard({
         >
           {secondaryAction.label}
         </button>
+      )}
+
+      {/* Crossword-only: surface an upvote control once the player has
+          solved today's puzzle. Lives below the secondary action so the
+          primary "go to next" CTA is still the visual anchor. */}
+      {game === "crossword" && upvotePuzzleId && !unknownTime && (
+        <CrosswordUpvote puzzleId={upvotePuzzleId} />
       )}
     </div>
   );

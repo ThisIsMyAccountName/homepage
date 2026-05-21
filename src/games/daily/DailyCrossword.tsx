@@ -1,34 +1,38 @@
 "use client";
 
 /**
- * Daily-crossword wrapper component. Mirrors `DailySudoku` in structure:
- * generates today's puzzle from the daily seed, restores any in-progress
- * letters from localStorage, runs a paused-by-default timer with a blur
- * overlay, auto-saves on every keystroke, and fires `onComplete` once the
- * grid matches the solution.
+ * Daily-crossword wrapper component.
  *
- * If the clue bank is empty (initial repo state, before the one-time LLM
- * batch has been run) the component renders a "coming soon" placeholder
- * instead of crashing — the daily hub then leaves crossword unplayable
- * until the bank is populated.
+ * Today's puzzle is fetched from `/api/crossword/daily` (which picks
+ * from the server-stored pool — approved-pool first, then the bundled
+ * fallback) instead of being generated client-side. The previous
+ * seeded-runtime-generator path took multi-second hitches on harder
+ * shapes and occasionally landed on the symmetric-pattern fallback,
+ * both of which are gone now.
+ *
+ * In-progress letters are persisted to localStorage keyed by date *and*
+ * puzzle id; mismatched ids invalidate the saved grid so a session
+ * carried over from a different puzzle can't make today's grid
+ * unsolvable (the "stuck the next day" bug).
+ *
+ * Completion fires `onComplete(time, errors, puzzleId)` so the daily
+ * hub can offer an upvote action on the completion card.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getDailySeed, getTodayKey } from "@/lib/daily";
+import { getTodayKey } from "@/lib/daily";
 import { useBoardSize } from "@/lib/useBoardSize";
 import { ClueBanner } from "@/games/crossword/ClueBanner";
 import { ClueList } from "@/games/crossword/ClueList";
 import { CrosswordBoard, type Selection } from "@/games/crossword/CrosswordBoard";
-import {
-  clueBankSize,
-  generateCrosswordPuzzle,
-} from "@/games/crossword/generator";
+import { fetchDailyCrossword } from "@/games/crossword/dailyFetch";
 import {
   clearDailySession,
   loadDailySession,
   saveDailySession,
 } from "@/games/crossword/session";
-import type { Direction, Entry, Puzzle } from "@/games/crossword/types";
+import type { StoredPuzzle } from "@/games/crossword/storedPuzzle";
+import type { Direction, Entry } from "@/games/crossword/types";
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -37,7 +41,7 @@ function formatTime(seconds: number): string {
 }
 
 /** Build the initial all-empty grid for `puzzle`. */
-function emptyGridFor(puzzle: Puzzle): string[][] {
+function emptyGridFor(puzzle: StoredPuzzle): string[][] {
   return Array.from({ length: puzzle.rows }, (_, r) =>
     Array.from({ length: puzzle.cols }, (_, c) =>
       puzzle.black[r][c] ? "#" : "."
@@ -45,7 +49,7 @@ function emptyGridFor(puzzle: Puzzle): string[][] {
   );
 }
 
-function initialSelection(puzzle: Puzzle): Selection {
+function initialSelection(puzzle: StoredPuzzle): Selection {
   const first =
     puzzle.entries.across[0] ?? puzzle.entries.down[0] ?? null;
   if (!first) {
@@ -80,62 +84,115 @@ function isFilled(grid: string[][]): boolean {
 }
 
 interface DailyCrosswordProps {
-  onComplete: (time: number, errors: number) => void;
+  /**
+   * Completion handler. `puzzleId` is the stable id of the puzzle that
+   * was just solved, so the parent can wire an upvote action on the
+   * completion card.
+   */
+  onComplete: (time: number, errors: number, puzzleId: string) => void;
 }
 
 export function DailyCrossword({ onComplete }: DailyCrosswordProps) {
-  // Detect the missing-bank case early so the rest of the hook tree never
-  // sees a thrown puzzle.
-  const bankEmpty = clueBankSize() === 0;
+  const todayKey = getTodayKey();
+  const [puzzle, setPuzzle] = useState<StoredPuzzle | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  if (bankEmpty) {
+  // Fetch today's puzzle once on mount. The fetcher caches the response
+  // in sessionStorage so subsequent mounts (strict-mode double-invoke,
+  // tab switches) are instant.
+  useEffect(() => {
+    const ac = new AbortController();
+    let cancelled = false;
+    fetchDailyCrossword(todayKey, ac.signal)
+      .then((res) => {
+        if (cancelled) return;
+        setPuzzle(res.puzzle);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setLoadError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [todayKey]);
+
+  if (loadError) {
     return (
       <div className="flex flex-col items-center gap-3 p-6 text-center">
         <p className="text-sm font-medium text-foreground">
-          Daily Crossword — coming soon
+          Couldn&apos;t load today&apos;s crossword.
         </p>
-        <p className="max-w-sm text-xs text-muted">
-          The clue bank hasn&apos;t been generated yet. Run{" "}
-          <code className="rounded bg-card px-1 py-0.5 font-mono text-[11px]">
-            node scripts/generate-clue-bank.mjs
-          </code>{" "}
-          to populate it.
-        </p>
+        <p className="max-w-sm text-xs text-muted">{loadError}</p>
       </div>
     );
   }
 
-  return <DailyCrosswordInner onComplete={onComplete} />;
+  if (!puzzle) {
+    return (
+      <div className="flex items-center justify-center p-8 text-sm text-muted">
+        Loading today&apos;s crossword…
+      </div>
+    );
+  }
+
+  return (
+    <DailyCrosswordInner
+      puzzle={puzzle}
+      todayKey={todayKey}
+      onComplete={onComplete}
+    />
+  );
+}
+
+interface InnerProps {
+  puzzle: StoredPuzzle;
+  todayKey: string;
+  onComplete: (time: number, errors: number, puzzleId: string) => void;
 }
 
 /**
- * The actual game. Split out from the wrapper so the bank-empty fallback
- * above can early-return without violating the rules-of-hooks.
+ * The actual game. Split out from the wrapper so the loading / error
+ * branches above can early-return without violating rules-of-hooks.
  */
-function DailyCrosswordInner({ onComplete }: DailyCrosswordProps) {
-  const todayKey = getTodayKey();
-
-  // Generate once per mount; result is deterministic from today's date.
-  const puzzle = useMemo<Puzzle>(() => generateCrosswordPuzzle(getDailySeed()), []);
+function DailyCrosswordInner({ puzzle, todayKey, onComplete }: InnerProps) {
+  const puzzleId = puzzle.id;
 
   const [grid, setGrid] = useState<string[][]>(() => {
-    const saved = loadDailySession(todayKey, puzzle.rows, puzzle.cols);
+    const saved = loadDailySession(
+      todayKey,
+      puzzleId,
+      puzzle.rows,
+      puzzle.cols
+    );
     return saved?.grid ?? emptyGridFor(puzzle);
   });
-  const [selection, setSelection] = useState<Selection>(() => initialSelection(puzzle));
+  const [selection, setSelection] = useState<Selection>(() =>
+    initialSelection(puzzle)
+  );
   const [errors, setErrors] = useState<Set<string>>(() => new Set());
   // Cells highlighted green by the most recent Check pass. Cleared (per
   // cell) on any user input so feedback never stays stale.
   const [corrects, setCorrects] = useState<Set<string>>(() => new Set());
   const [errorCount, setErrorCount] = useState<number>(
-    () => loadDailySession(todayKey, puzzle.rows, puzzle.cols)?.errorCount ?? 0
+    () =>
+      loadDailySession(todayKey, puzzleId, puzzle.rows, puzzle.cols)
+        ?.errorCount ?? 0
   );
   const [timer, setTimer] = useState<number>(
-    () => loadDailySession(todayKey, puzzle.rows, puzzle.cols)?.timer ?? 0
+    () =>
+      loadDailySession(todayKey, puzzleId, puzzle.rows, puzzle.cols)?.timer ?? 0
   );
   const [paused, setPaused] = useState(true);
   const [won, setWon] = useState<boolean>(() => {
-    const saved = loadDailySession(todayKey, puzzle.rows, puzzle.cols);
+    const saved = loadDailySession(
+      todayKey,
+      puzzleId,
+      puzzle.rows,
+      puzzle.cols
+    );
     return !!saved && isCorrect(saved.grid, puzzle.solution);
   });
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -169,8 +226,8 @@ function DailyCrosswordInner({ onComplete }: DailyCrosswordProps) {
   // Persist on every meaningful change so a refresh restores exactly.
   useEffect(() => {
     if (won) return;
-    saveDailySession(todayKey, grid, timer, errorCount);
-  }, [grid, timer, errorCount, won, todayKey]);
+    saveDailySession(todayKey, puzzleId, grid, timer, errorCount);
+  }, [grid, timer, errorCount, won, todayKey, puzzleId]);
 
   // Tracks whether we have already fired the parent's `onComplete`. Without
   // this, React's strict-mode double-invoke of the event handler (or a
@@ -215,7 +272,7 @@ function DailyCrosswordInner({ onComplete }: DailyCrosswordProps) {
         completedRef.current = true;
         setWon(true);
         clearDailySession(todayKey);
-        onComplete(timer, errorCount);
+        onComplete(timer, errorCount, puzzleId);
       }
     },
     [
@@ -226,6 +283,7 @@ function DailyCrosswordInner({ onComplete }: DailyCrosswordProps) {
       timer,
       errorCount,
       todayKey,
+      puzzleId,
       onComplete,
     ]
   );

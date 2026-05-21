@@ -13,6 +13,13 @@ const DAILY_KEY_PREFIX = "crossword-daily-session-";
 interface DailySession {
   rows: number;
   cols: number;
+  /**
+   * Stable id of the puzzle this session belongs to. Required since we
+   * moved to a server-stored pool — without it, a session saved against
+   * yesterday's grid could be restored on top of today's puzzle if the
+   * dims happened to match (the "stuck the next day" bug).
+   */
+  puzzleId: string;
   /** Flat row-major: rows*cols chars, one of `.`, `#`, or `A`…`Z`. */
   letters: string;
   timer: number;
@@ -42,6 +49,7 @@ function inflate(letters: string, rows: number, cols: number): string[][] | null
 
 export function saveDailySession(
   todayKey: string,
+  puzzleId: string,
   grid: string[][],
   timer: number,
   errorCount: number
@@ -51,6 +59,7 @@ export function saveDailySession(
   const data: DailySession = {
     rows: grid.length,
     cols: grid[0].length,
+    puzzleId,
     letters: flatten(grid),
     timer,
     errorCount,
@@ -63,13 +72,15 @@ export function saveDailySession(
 }
 
 /**
- * Returns the saved grid only if the stored dimensions match today's puzzle.
- * (They always should, since sessions are date-keyed, but a stale write
- * during local development can leave the wrong shape — better to discard
- * than crash on render.)
+ * Returns the saved grid only if the stored puzzle id (and dims) matches
+ * the puzzle we're about to render. The id check is the critical guard —
+ * date-keying alone left a stale session restorable on top of a different
+ * puzzle when shapes happened to coincide, which is exactly the "stuck
+ * the next day" bug.
  */
 export function loadDailySession(
   todayKey: string,
+  puzzleId: string,
   rows: number,
   cols: number
 ): { grid: string[][]; timer: number; errorCount: number } | null {
@@ -77,8 +88,15 @@ export function loadDailySession(
   try {
     const raw = window.localStorage.getItem(dailyKey(todayKey));
     if (!raw) return null;
-    const data = JSON.parse(raw) as DailySession;
+    const data = JSON.parse(raw) as Partial<DailySession>;
     if (data.rows !== rows || data.cols !== cols) return null;
+    // Reject sessions written before the id was added (old shape) — they
+    // can't be validated and would risk reintroducing the next-day-stuck
+    // bug. Erring on the side of starting fresh is safe.
+    if (typeof data.puzzleId !== "string" || data.puzzleId !== puzzleId) {
+      return null;
+    }
+    if (typeof data.letters !== "string") return null;
     const grid = inflate(data.letters, rows, cols);
     if (!grid) return null;
     return {

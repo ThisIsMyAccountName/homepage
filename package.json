@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "sync:idealer": "bash scripts/sync-idealer.sh"
+    "sync:idealer": "bash scripts/sync-idealer.sh",
+    "build:crossword-pool": "node scripts/build-crossword-pool.mjs"
   },
   "dependencies": {
     "next": "16.2.6",

@@ -201,32 +201,45 @@ export function CrosswordGame() {
     startNewPuzzle(rows, cols);
   }, [game, won, rows, cols, startNewPuzzle]);
 
-  // First-mount initialization — try to restore a saved session, otherwise
-  // generate a fresh puzzle.
+  // First-mount initialization — try to restore a saved session if one
+  // exists, otherwise leave the board empty until the player explicitly
+  // hits "New puzzle". Auto-generating on page load made `/games/crossword`
+  // wait several seconds on the procedural fill before anything could
+  // render; gating on a click keeps the page snappy and matches the
+  // existing UI prompt ("Pick a size to start").
   useEffect(() => {
     if (initRef.current || bankEmpty) return;
     initRef.current = true;
     const saved = loadFreeformSession();
     if (saved) {
       setGenerating(true);
+      // Defer the regeneration so the "Generating…" placeholder paints
+      // before the (potentially expensive) fill solver hogs the main thread.
       setTimeout(() => {
-        const next = buildGameFromSeed(saved.rows, saved.cols, saved.seed, saved.grid);
+        const next = buildGameFromSeed(
+          saved.rows,
+          saved.cols,
+          saved.seed,
+          saved.grid
+        );
         if (next) {
           setGame(next);
           setTimer(saved.timer);
           setErrorCount(saved.errorCount);
           setRevealed(saved.revealed);
-          setGenerating(false);
         } else {
-          // Seed couldn't be regenerated — start fresh.
+          // Seed couldn't be regenerated (clue bank changed, etc.). Drop
+          // the stale session and stay on the empty state — the player
+          // can pick dims and click New puzzle to roll a fresh one.
           clearFreeformSession();
-          startNewPuzzle(rows, cols);
         }
+        setGenerating(false);
       }, 0);
-    } else {
-      startNewPuzzle(rows, cols);
     }
-  }, [bankEmpty, rows, cols, startNewPuzzle]);
+    // No saved session — leave `game` as null. The empty-state UI prompts
+    // "Pick a size to start"; the player triggers generation via the
+    // "New puzzle" button so opening the page never blocks on the solver.
+  }, [bankEmpty]);
 
   // Timer
   useEffect(() => {

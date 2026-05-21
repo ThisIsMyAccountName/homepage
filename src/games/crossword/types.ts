@@ -54,7 +54,7 @@ export type Direction = "across" | "down";
 
 /**
  * A black-square mask: `mask[r][c] = true` means that cell is black.
- * Masks are 180°-rotationally symmetric by construction.
+ * Procedurally placed — no symmetry constraint.
  */
 export type BlackMask = boolean[][];
 
@@ -109,6 +109,3 @@ export interface Puzzle {
 
 /** Persisted clue bank shape on disk (`data/crossword-clues.json`). */
 export type ClueBank = Record<string, string[]>;
-
-/** Persisted black-square pattern library (`data/crossword-patterns.json`). */
-export type PatternLibrary = Record<ShapeKey, BlackMask[]>;
