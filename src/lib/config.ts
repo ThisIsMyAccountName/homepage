@@ -27,6 +27,8 @@ export const navigation: NavItem[] = [
       { label: "Physics Sandbox", href: "/games/example-game" },
       { label: "Nonogram", href: "/games/nonogram" },
       { label: "X Coloring", href: "/games/x-coloring" },
+      { label: "Flow", href: "/games/flow" },
+      { label: "Crossword", href: "/games/crossword" },
     ],
   },
   { label: "Files", href: "/files" },

@@ -134,6 +134,62 @@ export function CrosswordBoard({
     }
   }, [selection, disabled]);
 
+  // Live ref to the latest `navigateClue` so the document-level keydown
+  // listener below can call it without re-registering each render.
+  const navigateClueRef = useRef<(axis: Direction, forward: boolean) => void>(
+    () => {}
+  );
+
+  // Document-level arrow-key catcher. While the board is interactive,
+  // arrow keys navigate clues regardless of which element has focus, so
+  // the player doesn't lose nav if a tap moved focus off the board (onto
+  // a button, the page background, etc.). When focus is already on a
+  // board cell the per-input `onKeyDown` runs first and we bail here to
+  // avoid double-navigating; other inputs/selects on the page (e.g. the
+  // Size selects in `CrosswordGame`) are left alone so the user can still
+  // change them with arrow keys.
+  useEffect(() => {
+    if (disabled) return;
+    function onKey(e: KeyboardEvent) {
+      if (
+        e.key !== "ArrowUp" &&
+        e.key !== "ArrowDown" &&
+        e.key !== "ArrowLeft" &&
+        e.key !== "ArrowRight"
+      ) {
+        return;
+      }
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === "INPUT") {
+          // Focus on one of *our* cell inputs — let the per-input
+          // handler take it.
+          for (const el of inputs.current.values()) {
+            if (el === target) return;
+          }
+          // Some other input on the page — don't steal it.
+          return;
+        }
+        if (
+          tag === "TEXTAREA" ||
+          tag === "SELECT" ||
+          target.isContentEditable
+        ) {
+          return;
+        }
+      }
+      e.preventDefault();
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        navigateClueRef.current("across", e.key === "ArrowDown");
+      } else {
+        navigateClueRef.current("down", e.key === "ArrowRight");
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [disabled]);
+
 
   /** Find the next white cell in `direction` starting at (r,c), wrapping within the active entry. */
   function step(
@@ -164,11 +220,36 @@ export function CrosswordBoard({
     return { row: entry.cells[0].row, col: entry.cells[0].col };
   }
 
+  /** True iff every white cell of `entry` already has a letter (right or wrong). */
+  function isEntryFilled(entry: Entry): boolean {
+    return entry.cells.every(({ row, col }) => grid[row][col] !== ".");
+  }
+
   /**
-   * Move to the prev/next entry in `axis`. If the player is currently in a
-   * different direction and the cell already lies on an entry in `axis`,
-   * the first press just flips direction at the current cell — the second
-   * press then moves through that axis's clue list.
+   * Walk `list` starting from `curIdx`, moving forward or backward, and
+   * return the first entry that still has at least one empty cell. Returns
+   * null if every entry in the axis is already filled.
+   */
+  function nextUnfilledInList(
+    list: Entry[],
+    curIdx: number,
+    forward: boolean
+  ): Entry | null {
+    const n = list.length;
+    for (let i = 1; i <= n; i++) {
+      const idx = (((curIdx + (forward ? i : -i)) % n) + n) % n;
+      const candidate = list[idx];
+      if (!isEntryFilled(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  /**
+   * Move to the prev/next clue in `axis`, skipping any entry whose cells
+   * are all already filled. When the player is currently in the other
+   * direction and the cell lies on an entry in `axis`, the press becomes a
+   * direction change *and* moves the caret to the first empty cell of that
+   * entry (or the next unfilled entry, if the passing one is also done).
    */
   function navigateClue(axis: Direction, forward: boolean) {
     const list = puzzle.entries[axis];
@@ -179,21 +260,37 @@ export function CrosswordBoard({
       )
     );
     if (selection.direction !== axis && passingHere) {
-      // Soft direction-flip: stay on the cell, swap axis.
-      onSelectionChange({
-        row: selection.row,
-        col: selection.col,
-        direction: axis,
-      });
+      // Direction change: jump to the first empty cell of the passing entry,
+      // or skip ahead to the next unfilled entry in this axis if it's done.
+      const target = isEntryFilled(passingHere)
+        ? nextUnfilledInList(list, list.indexOf(passingHere), forward)
+        : passingHere;
+      if (!target) {
+        // Whole axis is complete — just flip direction in place.
+        onSelectionChange({
+          row: selection.row,
+          col: selection.col,
+          direction: axis,
+        });
+        return;
+      }
+      const cell = firstEmptyOrHead(target);
+      onSelectionChange({ row: cell.row, col: cell.col, direction: axis });
       return;
     }
     const curIdx = passingHere ? list.indexOf(passingHere) : -1;
-    const nextIdx = (curIdx + (forward ? 1 : -1) + list.length) % list.length;
-    const nextEntry = list[nextIdx];
+    const nextEntry = nextUnfilledInList(list, curIdx, forward);
     if (!nextEntry) return;
     const target = firstEmptyOrHead(nextEntry);
     onSelectionChange({ row: target.row, col: target.col, direction: axis });
   }
+
+  // Refresh the global-listener target after every render so it always
+  // sees the current `selection` / `grid` closures without forcing the
+  // keydown listener to re-register.
+  useEffect(() => {
+    navigateClueRef.current = navigateClue;
+  });
 
   function handleCellClick(r: number, c: number) {
     if (grid[r][c] === "#") return;
@@ -247,12 +344,19 @@ export function CrosswordBoard({
     }
     if (key === "Backspace") {
       e.preventDefault();
+      // Confirmed-correct cells are locked: backspace on one is a no-op.
+      if (corrects?.has(cellKey(r, c))) return;
       if (grid[r][c] && grid[r][c] !== "." && grid[r][c] !== "#") {
         // Cell has a letter — clear it, stay in place.
         onCellInput(r, c, "");
       } else {
-        // Cell empty — go back and clear that one too.
-        const prev = step(r, c, selection.direction, false);
+        // Cell empty — walk back to the previous non-locked cell and clear
+        // that one. Locked cells are skipped over so backspace can still
+        // reach editable letters earlier in the word.
+        let prev = step(r, c, selection.direction, false);
+        while (prev && corrects?.has(cellKey(prev.row, prev.col))) {
+          prev = step(prev.row, prev.col, selection.direction, false);
+        }
         if (prev) {
           onCellInput(prev.row, prev.col, "");
           onSelectionChange({ ...prev, direction: selection.direction });
@@ -262,22 +366,26 @@ export function CrosswordBoard({
     }
     if (key === "Delete") {
       e.preventDefault();
+      if (corrects?.has(cellKey(r, c))) return;
       onCellInput(r, c, "");
       return;
     }
-    // Arrow keys navigate *clues* (entries), not individual cells:
-    //   - Up/Down  → prev/next clue along the down axis
-    //   - Left/Right → prev/next clue along the across axis
-    // Cell-level movement happens implicitly via typing + Backspace. To
-    // pick an arbitrary cell within an entry, click it.
+    // Arrow keys navigate *clues* (entries), not individual cells. The
+    // mapping treats the arrow direction as scrolling the clue list, not
+    // the grid:
+    //   - Up/Down  → prev/next clue in the Across list
+    //   - Left/Right → prev/next clue in the Down list
+    // Already-filled entries are skipped; flipping axis lands on that
+    // entry's first empty cell. Cell-level movement happens implicitly
+    // via typing + Backspace; click a cell to land on it directly.
     if (key === "ArrowUp" || key === "ArrowDown") {
       e.preventDefault();
-      navigateClue("down", key === "ArrowDown");
+      navigateClue("across", key === "ArrowDown");
       return;
     }
     if (key === "ArrowLeft" || key === "ArrowRight") {
       e.preventDefault();
-      navigateClue("across", key === "ArrowRight");
+      navigateClue("down", key === "ArrowRight");
       return;
     }
     if (key === "Tab") {
@@ -294,6 +402,8 @@ export function CrosswordBoard({
     c: number
   ) {
     if (disabled) return;
+    // Confirmed-correct cells are locked — ignore any input on them.
+    if (corrects?.has(cellKey(r, c))) return;
     const raw = e.target.value;
     // Extract the last typed character; letters are uppercased and digits
     // pass through unchanged so the bank's number-bearing answers (e.g.
@@ -304,11 +414,14 @@ export function CrosswordBoard({
       return;
     }
     onCellInput(r, c, ch);
-    // Advance to the *literal* next cell in the active entry, never
-    // skipping a filled one — skip-filled looks magical when the player
-    // landed on the first blank of a partial word and the caret then
-    // hops past an existing letter they may want to overwrite.
-    const next = step(r, c, selection.direction, true);
+    // Advance to the next *empty* cell in the active entry — both locked
+    // (green) and plain user-typed letters are skipped, so the caret
+    // always lands on the next square that still needs a letter. If
+    // every later cell in the entry is filled, advance stops at the end.
+    let next = step(r, c, selection.direction, true);
+    while (next && grid[next.row][next.col] !== ".") {
+      next = step(next.row, next.col, selection.direction, true);
+    }
     if (next) onSelectionChange({ ...next, direction: selection.direction });
   }
 
@@ -363,14 +476,15 @@ export function CrosswordBoard({
           const isRevealed = revealed?.has(key) ?? false;
           const number = puzzle.numbers[r][c];
 
-          // Feedback priority (highest wins):
-          //   revealed (blue) → error (red) → correct (green) → selected
-          //   → active-word. Revealed cells outrank green because the
-          //   player knows that letter was given, not solved.
+          // Feedback priority (highest wins): revealed (blue) → error
+          // (red) → selected → active-word. Confirmed-correct cells only
+          // tint the *letter* green (see input className below) — their
+          // background stays in the normal selected/active-word/card flow
+          // so a locked square still shows the usual selection highlight
+          // when the player navigates onto it.
           let bg = "bg-card";
           if (isRevealed) bg = "bg-blue-500/25";
           else if (isError) bg = "bg-red-500/25";
-          else if (isCorrect) bg = "bg-emerald-500/25";
           else if (isSelected) bg = "bg-accent/35";
           else if (isActiveWord) bg = "bg-accent/12";
 
@@ -419,7 +533,7 @@ export function CrosswordBoard({
                 } caret-transparent`}
                 style={{ fontSize: Math.max(12, Math.floor(cellPx * 0.55)) }}
                 tabIndex={isSelected ? 0 : -1}
-                readOnly={disabled}
+                readOnly={disabled || isCorrect}
               />
             </div>
           );
