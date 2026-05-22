@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { getTodayKey } from "@/lib/daily";
 import { sanitizeName } from "@/lib/security";
 
-export type GameId = "sudoku" | "nonogram" | "x-coloring" | "crossword";
+export type GameId = "sudoku" | "nonogram" | "x-coloring" | "crossword" | "cryptic";
 
 interface SubmitScoreProps {
   game: GameId;

@@ -57,6 +57,13 @@ const gameRegistry: Record<string, GameEntry> = {
         default: mod.CrosswordGame as unknown as ComponentType,
       })),
   },
+  cryptic: {
+    type: "component",
+    load: () =>
+      import("@/games/cryptic").then((mod) => ({
+        default: mod.CrypticGame as unknown as ComponentType,
+      })),
+  },
   idealer: {
     type: "iframe",
     src: "/games/idealer/index.html",

@@ -13,13 +13,19 @@
 
 import { getTodayKey } from "@/lib/daily";
 
-export type DailyGameId = "sudoku" | "nonogram" | "x-coloring" | "crossword";
+export type DailyGameId =
+  | "sudoku"
+  | "nonogram"
+  | "x-coloring"
+  | "crossword"
+  | "cryptic";
 
 export const DAILY_GAMES: readonly DailyGameId[] = [
   "sudoku",
   "nonogram",
   "x-coloring",
   "crossword",
+  "cryptic",
 ] as const;
 
 export interface CompletionRecord {
@@ -42,6 +48,7 @@ const LEGACY_FLAG_KEY: Record<DailyGameId, (key: string) => string> = {
   // Crossword is post-legacy; no v0 flag to migrate. A key that can't match
   // any stored value keeps the type complete without ever firing a merge.
   crossword: () => "__no-legacy-key__",
+  cryptic: () => "__no-legacy-key__",
 };
 
 function storageKey(dateKey: string): string {
@@ -158,6 +165,7 @@ export const GAME_LABELS: Record<DailyGameId, string> = {
   nonogram: "Nonogram",
   "x-coloring": "X Coloring",
   crossword: "Crossword",
+  cryptic: "Cryptic",
 };
 
 export const GAME_SUBTITLES: Record<DailyGameId, string> = {
@@ -165,4 +173,5 @@ export const GAME_SUBTITLES: Record<DailyGameId, string> = {
   nonogram: "7×7 picross",
   "x-coloring": "graph paint",
   crossword: "mini puzzle",
+  cryptic: "one clue",
 };

@@ -1,0 +1,1 @@
+export { CrypticGame } from "./CrypticGame";

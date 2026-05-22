@@ -27,12 +27,13 @@ interface CombinedEntry {
   perGame: Partial<Record<DailyGameId, { time: number; errors: number }>>;
 }
 
-/** Single-letter row prefix per daily game (S / N / X / C). */
+/** Single-letter row prefix per daily game. */
 const COMBINED_ABBR: Record<DailyGameId, string> = {
   sudoku: "S",
   nonogram: "N",
   "x-coloring": "X",
   crossword: "C",
+  cryptic: "Y",
 };
 
 interface DailyLeaderboardPanelProps {

@@ -1,12 +1,18 @@
 import { formatTime } from "@/lib/gameUtils";
 
-export type ShareGame = "sudoku" | "nonogram" | "x-coloring" | "crossword";
+export type ShareGame =
+  | "sudoku"
+  | "nonogram"
+  | "x-coloring"
+  | "crossword"
+  | "cryptic";
 
 const GAME_META: Record<ShareGame, { emoji: string; label: string }> = {
   sudoku: { emoji: "🔢", label: "Daily Sudoku" },
   nonogram: { emoji: "🖼️", label: "Daily Nonogram" },
   "x-coloring": { emoji: "🎨", label: "Daily X Coloring" },
   crossword: { emoji: "📝", label: "Daily Crossword" },
+  cryptic: { emoji: "🕵️", label: "Daily Cryptic" },
 };
 
 /** Short labels (no "Daily " prefix) for the combined per-game lines. */
@@ -15,6 +21,7 @@ const SHORT_LABELS: Record<ShareGame, string> = {
   nonogram: "Nonogram",
   "x-coloring": "X Coloring",
   crossword: "Crossword",
+  cryptic: "Cryptic",
 };
 
 /** A tiny medal based on how fast the solve was. */

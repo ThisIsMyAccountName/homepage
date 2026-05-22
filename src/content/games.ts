@@ -54,4 +54,13 @@ export const games: GameMeta[] = [
     controls:
       "Click a cell to select. Type letters/digits to fill. Spacebar flips direction. Arrow keys / Tab jump between clues. Backspace clears.",
   },
+  {
+    slug: "cryptic",
+    title: "Cryptic",
+    description:
+      "Solve a single cryptic crossword clue. Wordle-style letter cells match the pattern; hints reveal the definition or a letter at the cost of a penalty point.",
+    thumbnail: "/images/cryptic.svg",
+    controls:
+      "Type letters to fill cells. Submit to check. Buttons reveal the definition or a single letter. 👍 / 👎 rate the clue post-solve.",
+  },
 ];

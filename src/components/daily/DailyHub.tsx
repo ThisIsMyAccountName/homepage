@@ -61,6 +61,14 @@ const DailyCrossword = dynamic(
   { ssr: false, loading: () => GameLoader }
 );
 
+const DailyCryptic = dynamic(
+  () =>
+    import("@/games/daily/DailyCryptic").then((m) => ({
+      default: m.DailyCryptic,
+    })),
+  { ssr: false, loading: () => GameLoader }
+);
+
 const DailyCrosswordSolution = dynamic(
   () =>
     import("@/games/daily/DailyCrosswordSolution").then((m) => ({
@@ -82,6 +90,7 @@ const SIMPLE_GAME_COMPONENT: Record<
   sudoku: DailySudoku,
   nonogram: DailyNonogram,
   "x-coloring": DailyXColoring,
+  cryptic: DailyCryptic,
 };
 
 type Step = DailyGameId | "recap";

@@ -26,6 +26,24 @@ interface DeletedClueEntry {
   deletedAt: number;
 }
 
+interface CrypticFlaggedEntry {
+  key: string;
+  clue: string;
+  pattern: string;
+  wordplay: string;
+  firstFlaggedAt: number;
+  lastFlaggedAt: number;
+  count: number;
+}
+
+interface CrypticDeletedEntry {
+  key: string;
+  clue?: string;
+  pattern?: string;
+  wordplay?: string;
+  deletedAt: number;
+}
+
 function authHeaders(pw: string): HeadersInit {
   return { "x-review-password": pw, "Content-Type": "application/json" };
 }
@@ -181,6 +199,10 @@ function FlaggedCard({
 function ReviewView({ password }: { password: string }) {
   const [flagged, setFlagged] = useState<FlaggedRecord[]>([]);
   const [deletedLog, setDeletedLog] = useState<DeletedClueEntry[]>([]);
+  const [crypticFlagged, setCrypticFlagged] = useState<CrypticFlaggedEntry[]>([]);
+  const [crypticGood, setCrypticGood] = useState<string[]>([]);
+  const [crypticDeletedLog, setCrypticDeletedLog] = useState<CrypticDeletedEntry[]>([]);
+  const [crypticHandled, setCrypticHandled] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   // "WORD|||clue" keys for optimistic deleted-clue UI
@@ -199,6 +221,9 @@ function ReviewView({ password }: { password: string }) {
       .then((data) => {
         setFlagged(data.flagged ?? []);
         setDeletedLog(data.deletedLog ?? []);
+        setCrypticFlagged(data.crypticFlagged ?? []);
+        setCrypticGood(data.crypticGood ?? []);
+        setCrypticDeletedLog(data.crypticDeletedLog ?? []);
         setLoading(false);
       });
   }, [password]);
@@ -242,6 +267,53 @@ function ReviewView({ password }: { password: string }) {
         return next;
       });
     }
+  };
+
+  const handleCrypticDismiss = async (key: string) => {
+    setCrypticHandled((prev) => new Set(prev).add(key));
+    const res = await fetch("/api/cluereview/cryptic-dismiss", {
+      method: "POST",
+      headers: authHeaders(pwRef.current),
+      body: JSON.stringify({ key }),
+    });
+    if (!res.ok) {
+      setCrypticHandled((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
+  const handleCrypticDelete = async (entry: CrypticFlaggedEntry) => {
+    setCrypticHandled((prev) => new Set(prev).add(entry.key));
+    const res = await fetch("/api/cluereview/cryptic-delete", {
+      method: "POST",
+      headers: authHeaders(pwRef.current),
+      body: JSON.stringify({ key: entry.key }),
+    });
+    if (!res.ok) {
+      setCrypticHandled((prev) => {
+        const next = new Set(prev);
+        next.delete(entry.key);
+        return next;
+      });
+      return;
+    }
+    setCrypticDeletedLog((prev) =>
+      prev.some((e) => e.key === entry.key)
+        ? prev
+        : [
+            ...prev,
+            {
+              key: entry.key,
+              clue: entry.clue,
+              pattern: entry.pattern,
+              wordplay: entry.wordplay,
+              deletedAt: Date.now(),
+            },
+          ]
+    );
   };
 
   const visible = flagged.filter((r) => !dismissedIds.has(r.puzzleId));
@@ -339,7 +411,181 @@ function ReviewView({ password }: { password: string }) {
           </div>
         )}
       </section>
+
+      {/* ── Cryptic — flagged clues ── */}
+      <section className="mt-14">
+        <div className="flex items-baseline gap-3 mb-3">
+          <h2 className="text-lg font-semibold">Cryptic — Flagged Clues</h2>
+          <span className="font-mono text-xs text-muted">
+            {crypticFlagged.filter((f) => !crypticHandled.has(f.key)).length}{" "}
+            pending
+          </span>
+          <span className="font-mono text-xs text-muted">
+            · {crypticGood.length} in good pool
+          </span>
+        </div>
+        <CrypticFlaggedTable
+          entries={crypticFlagged}
+          handled={crypticHandled}
+          onDismiss={handleCrypticDismiss}
+          onDelete={handleCrypticDelete}
+        />
+      </section>
+
+      {/* ── Cryptic — deleted log ── */}
+      <section className="mt-10">
+        <div className="flex items-baseline gap-3 mb-3">
+          <h2 className="text-lg font-semibold">Cryptic — Deleted Clues</h2>
+          <span className="font-mono text-xs text-muted">
+            {crypticDeletedLog.length} entr
+            {crypticDeletedLog.length !== 1 ? "ies" : "y"}
+          </span>
+        </div>
+        <div className="border border-amber-500/30 bg-amber-500/5 rounded p-4 text-sm text-amber-200/80 mb-5 leading-relaxed">
+          Stored in{" "}
+          <code className="font-mono text-amber-300/90">
+            data/cryptic-deleted-clues.json
+          </code>
+          . Source dataset edits are written to{" "}
+          <code className="font-mono text-amber-300/90">
+            data/cryptic-clues.json
+          </code>{" "}
+          (both gitignored — survives git pulls).
+        </div>
+        {crypticDeletedLog.length === 0 ? (
+          <p className="text-muted text-sm">No clues deleted yet.</p>
+        ) : (
+          <div className="border border-border rounded overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-card">
+                  <th className="text-left px-4 py-2.5 text-muted font-medium text-xs">
+                    Answer
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-muted font-medium text-xs">
+                    Clue
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-muted font-medium text-xs">
+                    Deleted
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {crypticDeletedLog.map((entry, i) => (
+                  <tr
+                    key={`${entry.key}-${i}`}
+                    className="border-b border-border last:border-0"
+                  >
+                    <td className="px-4 py-2.5 font-mono text-accent">
+                      {entry.key}
+                    </td>
+                    <td className="px-4 py-2.5 text-muted">
+                      {entry.clue ?? "—"}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-muted">
+                      {new Date(entry.deletedAt).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </PageContainer>
+  );
+}
+
+function CrypticFlaggedTable({
+  entries,
+  handled,
+  onDismiss,
+  onDelete,
+}: {
+  entries: CrypticFlaggedEntry[];
+  handled: Set<string>;
+  onDismiss: (key: string) => void;
+  onDelete: (entry: CrypticFlaggedEntry) => void;
+}) {
+  if (entries.length === 0) {
+    return (
+      <div className="border border-border rounded p-8 text-center text-muted text-sm">
+        No flagged cryptic clues — queue is clear.
+      </div>
+    );
+  }
+  return (
+    <div className="border border-border rounded overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-card">
+            <th className="text-left px-4 py-2.5 text-muted font-medium text-xs w-32">
+              Answer
+            </th>
+            <th className="text-left px-4 py-2.5 text-muted font-medium text-xs w-16">
+              ({"#"})
+            </th>
+            <th className="text-left px-4 py-2.5 text-muted font-medium text-xs">
+              Clue
+            </th>
+            <th className="text-left px-4 py-2.5 text-muted font-medium text-xs">
+              Wordplay
+            </th>
+            <th className="text-left px-4 py-2.5 text-muted font-medium text-xs w-12">
+              Flags
+            </th>
+            <th className="px-4 py-2.5 text-xs w-44" />
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => {
+            const done = handled.has(entry.key);
+            return (
+              <tr
+                key={entry.key}
+                className={`border-b border-border last:border-0 align-top transition-opacity ${
+                  done ? "opacity-40" : ""
+                }`}
+              >
+                <td className="px-4 py-2.5 font-mono text-accent">{entry.key}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-muted">
+                  {entry.pattern}
+                </td>
+                <td className="px-4 py-2.5">{entry.clue}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-muted">
+                  {entry.wordplay || "—"}
+                </td>
+                <td className="px-4 py-2.5 font-mono text-xs text-red-400">
+                  ×{entry.count}
+                </td>
+                <td className="px-4 py-2.5 text-right">
+                  {done ? (
+                    <span className="text-xs text-muted italic">handled</span>
+                  ) : (
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onDismiss(entry.key)}
+                        className="text-xs text-muted hover:text-foreground border border-border rounded px-2 py-0.5 hover:border-accent/40 transition-colors"
+                      >
+                        Dismiss
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(entry)}
+                        className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400/60 rounded px-2 py-0.5 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

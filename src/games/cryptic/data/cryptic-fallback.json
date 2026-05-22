@@ -1,0 +1,82 @@
+{
+  "SEDATE": {
+    "clue": "Quarter fruit {in a dignified way}",
+    "pattern": "6",
+    "wordplay": "SE (quarter) + DATE (fruit)"
+  },
+  "ACAPULCO": {
+    "clue": "A top university hydrologist essentially takes care of {bay}",
+    "pattern": "8",
+    "wordplay": "A + CAP (top) + U (university) + [hydro]L[ogist] (essentially) takes CO (care of)"
+  },
+  "BRAINY": {
+    "clue": "{Showing intelligence} by keeping control in the auditorium",
+    "pattern": "6",
+    "wordplay": "BY around (keeping) RAIN (control = 'rein' – sounds like, in the auditorium)"
+  },
+  "TOP SECRET": {
+    "clue": "{Hush-hush} operations in Crete upset head of tourism",
+    "pattern": "3-6",
+    "wordplay": "OPS (operations) in *(CRETE) (*upset) + T[ourism]"
+  },
+  "ORGAN": {
+    "clue": "{Feature in a church} {newspaper}",
+    "pattern": "5",
+    "wordplay": "Double Definition"
+  },
+  "ASCOT": {
+    "clue": "{Type of necktie} a Caledonian may produce",
+    "pattern": "5",
+    "wordplay": "A + SCOT (Caledonian)"
+  },
+  "CHEONGSAM": {
+    "clue": "G-man chose fancy {dress}",
+    "pattern": "9",
+    "wordplay": "*(G MAN CHOSE) (*fancy)"
+  },
+  "FIRST AID": {
+    "clue": "Grave next to tree will get {immediate attention}",
+    "pattern": "5,3",
+    "wordplay": "FIR (tree) + STAID (grave)"
+  },
+  "DISOWN": {
+    "clue": "{Deny any connection with} row surrounding broadcast",
+    "pattern": "6",
+    "wordplay": "DIN (row) around (surrounding) SOW (broadcast)"
+  },
+  "ARTISANS": {
+    "clue": "{Skilled workers} , Arthur and Ian, carrying small spades",
+    "pattern": "8",
+    "wordplay": "ART (Arthur) + IAN around S (small) + S (spades)"
+  },
+  "ENIGMA": {
+    "clue": "Cypher machine, {puzzle}",
+    "pattern": "6",
+    "wordplay": "Double definition"
+  },
+  "ALOOF": {
+    "clue": "{Reserved} pub, on top",
+    "pattern": "5",
+    "wordplay": "ALE (pub drink) around OOF? — A + LOO (place) + F? — figurative"
+  },
+  "GAMBIT": {
+    "clue": "{Opening move} brought a smile, a little",
+    "pattern": "6",
+    "wordplay": "GAM (smile) + BIT (a little)"
+  },
+  "PINEAPPLE": {
+    "clue": "Soft fruit kept {by an explosive}",
+    "pattern": "9",
+    "wordplay": "P (soft) + IN (kept) + EA (each) + APPLE (fruit) — informal: grenade"
+  },
+  "RECESS": {
+    "clue": "{Break} we hear in the speech",
+    "pattern": "6",
+    "wordplay": "Sounds like 'recess' in oratory; double-def with hidden alcove"
+  },
+  "EUREKA": {
+    "clue": "{Discovery!} after a quiet bath",
+    "pattern": "6",
+    "wordplay": "Archimedes shout, lit. 'I have found it'"
+  }
+}

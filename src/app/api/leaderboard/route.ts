@@ -4,7 +4,7 @@ import path from "path";
 import { sanitizeName, validateSubmission } from "@/lib/security";
 import { getTodayKey } from "@/lib/daily";
 
-export const GAMES = ["sudoku", "nonogram", "x-coloring", "crossword"] as const;
+export const GAMES = ["sudoku", "nonogram", "x-coloring", "crossword", "cryptic"] as const;
 export type GameId = (typeof GAMES)[number];
 
 export interface LeaderboardEntry {
