@@ -16,3 +16,4 @@ services:
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
+      - CLUE_REVIEW_PASSWORD=${CLUE_REVIEW_PASSWORD}
