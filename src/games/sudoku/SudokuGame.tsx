@@ -28,6 +28,7 @@ import { GameTabs } from "@/components/games/GameTabs";
 import { GameHistory, type HistoryEntry } from "@/components/games/GameHistory";
 import { ConfirmDialog } from "@/components/games/ConfirmDialog";
 import { formatTime } from "@/lib/gameUtils";
+import { useAutoPause } from "@/lib/useAutoPause";
 
 type GameSize = 6 | 9 | 16;
 
@@ -188,6 +189,8 @@ export function SudokuGame() {
     };
   }, [running, paused, won, game]);
 
+  useAutoPause(setPaused, won);
+
   // Auto-save the in-progress puzzle so it survives reloads.
   // Cleared on win / new game.
   useEffect(() => {
@@ -334,6 +337,11 @@ export function SudokuGame() {
   const isGiven = (r: number, c: number) => puzzle[r][c] !== null;
   const isSelected = (r: number, c: number) =>
     selected !== null && selected[0] === r && selected[1] === c;
+  const selectedValue = selected ? board[selected[0]][selected[1]] : null;
+  const isSameValue = (r: number, c: number) =>
+    selectedValue !== null &&
+    board[r][c] === selectedValue &&
+    !isSelected(r, c);
 
   const cellMax =
     size === 16 ? 28 : size === 9 ? 40 : 48;
@@ -433,6 +441,7 @@ export function SudokuGame() {
                 let bg = "bg-card";
                 if (isSelected(r, c)) bg = "bg-accent/20";
                 else if (isError(r, c)) bg = "bg-red-500/20";
+                else if (isSameValue(r, c)) bg = "bg-accent/10";
 
                 return (
                   <button
@@ -447,8 +456,7 @@ export function SudokuGame() {
                       ${bottomBox ? "border-b-2 border-b-foreground/60" : "border-b border-b-border"}
                       ${c === size - 1 ? "!border-r-0" : ""}
                       ${r === size - 1 ? "!border-b-0" : ""}
-                      ${isGiven(r, c) ? "text-foreground" : "text-accent"}
-                      ${isError(r, c) ? "!text-red-400" : ""}
+                      ${isError(r, c) ? "!text-red-400" : isSameValue(r, c) ? "!text-accent" : isGiven(r, c) ? "text-foreground" : "text-accent"}
                       hover:bg-accent/10
                     `}
                     aria-label={`Row ${r + 1} Column ${c + 1}${cell ? ` value ${config.symbols[cell - 1]}` : " empty"}`}

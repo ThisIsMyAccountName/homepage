@@ -40,6 +40,14 @@ import {
 } from "@/games/crossword/session";
 import type { StoredPuzzle } from "@/games/crossword/storedPuzzle";
 import type { Direction, Entry } from "@/games/crossword/types";
+import { PausedRules } from "@/components/games/PausedRules";
+import { useAutoPause } from "@/lib/useAutoPause";
+
+const CROSSWORD_RULES = [
+  "Fill the grid using the across and down clues.",
+  "Type letters to fill the active cell; spacebar flips direction.",
+  "Arrow keys, Tab, and the clue list jump between entries.",
+];
 
 function initialSelection(puzzle: StoredPuzzle): Selection {
   const first =
@@ -193,6 +201,8 @@ function DailyCrosswordInner({ puzzle, todayKey, onComplete }: InnerProps) {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [paused, won]);
+
+  useAutoPause(setPaused, won);
 
   // Persist on every meaningful change so a refresh restores exactly.
   useEffect(() => {
@@ -433,16 +443,24 @@ function DailyCrosswordInner({ puzzle, todayKey, onComplete }: InnerProps) {
                 onCellInput={handleCellInput}
               />
               {paused && !won && (
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setPaused(false)}
-                  className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-transparent"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setPaused(false);
+                    }
+                  }}
+                  className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-3 bg-transparent px-3"
                   aria-label={timer === 0 ? "Start daily crossword" : "Resume"}
                 >
+                  <PausedRules rules={CROSSWORD_RULES} />
                   <span className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-background shadow-lg">
                     {timer === 0 ? "Start" : "Resume"}
                   </span>
-                </button>
+                </div>
               )}
             </div>
           </div>

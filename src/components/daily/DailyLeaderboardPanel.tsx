@@ -1,28 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { DAILY_GAMES, GAME_LABELS, type DailyGameId } from "@/lib/dailyProgress";
 import { formatTime } from "@/lib/gameUtils";
 
 /**
- * Self-contained leaderboard with tabs for each game plus a "Combined" tab
- * that ranks by sum of best per-game times (no error penalty). Renders inline
- * on wide screens (sidebar) and inside an accordion on narrow screens — the
- * hub controls layout, this panel just renders.
+ * Self-contained leaderboard for a single board — the active game (or the
+ * combined ranking when the player is on the recap). The hub picks which
+ * board via `activeTab`; this panel has no internal switching.
  */
 
 type Tab = DailyGameId | "combined";
-/** Shorter labels for the leaderboard tab strip so nothing wraps on mobile. */
-const TAB_LABEL_OVERRIDES: Partial<Record<DailyGameId, string>> = {
-  "x-coloring": "Coloring",
-};
-const TABS: { id: Tab; label: string }[] = [
-  ...DAILY_GAMES.map((g) => ({
-    id: g as Tab,
-    label: TAB_LABEL_OVERRIDES[g] ?? GAME_LABELS[g],
-  })),
-  { id: "combined" as Tab, label: "Combined" },
-];
 
 interface PerGameEntry {
   name: string;
@@ -50,57 +38,66 @@ const COMBINED_ABBR: Record<DailyGameId, string> = {
 interface DailyLeaderboardPanelProps {
   /** Bumped by the hub after a submission to force an immediate refetch. */
   refreshKey?: number;
-  /** Tab to open by default. */
-  initialTab?: Tab;
+  /**
+   * Which board to show — one of the daily games or "combined". The panel
+   * has no UI to change this; the hub flips it when the player switches
+   * step.
+   */
+  activeTab?: Tab;
   /** Highlight rows where the player name matches (case-insensitive). */
   highlightName?: string | null;
 }
 
 export function DailyLeaderboardPanel({
   refreshKey = 0,
-  initialTab = DAILY_GAMES[0],
+  activeTab = DAILY_GAMES[0],
   highlightName,
 }: DailyLeaderboardPanelProps) {
-  const [tab, setTab] = useState<Tab>(initialTab);
   const [perGame, setPerGame] = useState<PerGameEntry[] | null>(null);
   const [combined, setCombined] = useState<CombinedEntry[] | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const switchTab = useCallback((next: Tab) => {
-    setLoading(true);
-    setTab(next);
-  }, []);
+  // Loading is derived: we're loading until the initial fetch for the
+  // current (tab, refreshKey) signature finishes. Background polling
+  // doesn't touch this, so refreshed lists swap in silently.
+  const [lastFetched, setLastFetched] = useState<{
+    tab: Tab;
+    refresh: number;
+  } | null>(null);
+  const loading =
+    lastFetched === null ||
+    lastFetched.tab !== activeTab ||
+    lastFetched.refresh !== refreshKey;
 
   useEffect(() => {
     const url =
-      tab === "combined"
+      activeTab === "combined"
         ? "/api/leaderboard?game=combined"
-        : `/api/leaderboard?game=${encodeURIComponent(tab)}`;
+        : `/api/leaderboard?game=${encodeURIComponent(activeTab)}`;
 
     let cancelled = false;
     fetch(url)
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
-        if (tab === "combined") {
+        if (activeTab === "combined") {
           setCombined(data.entries ?? []);
         } else {
           setPerGame(data.entries ?? []);
         }
-        setLoading(false);
       })
-      .catch(() => {
+      .finally(() => {
         if (cancelled) return;
-        setLoading(false);
+        setLastFetched({ tab: activeTab, refresh: refreshKey });
       });
 
-    // Poll every 30s while this tab is open.
+    // Poll every 30s while this board is open. Polling refreshes the list
+    // silently — it deliberately doesn't update `lastFetched`, so loading
+    // stays false and the rows don't flicker back to "Loading…".
     const interval = setInterval(() => {
       fetch(url)
         .then((r) => r.json())
         .then((data) => {
           if (cancelled) return;
-          if (tab === "combined") setCombined(data.entries ?? []);
+          if (activeTab === "combined") setCombined(data.entries ?? []);
           else setPerGame(data.entries ?? []);
         })
         .catch(() => {});
@@ -110,34 +107,23 @@ export function DailyLeaderboardPanel({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [tab, refreshKey]);
+  }, [activeTab, refreshKey]);
 
   const matchName = highlightName?.trim().toLowerCase() ?? null;
+  const boardLabel =
+    activeTab === "combined" ? "Combined" : GAME_LABELS[activeTab];
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-1 rounded-md border border-border bg-card/60 p-1">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => switchTab(t.id)}
-            className={`flex-1 min-w-[64px] rounded px-2 py-1 text-xs font-medium transition-colors ${
-              tab === t.id
-                ? "bg-accent text-background"
-                : "text-muted hover:text-foreground"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Caption — replaces the previous tab strip; tells the player which
+          board they're looking at since it now follows the active game. */}
+      <p className="text-sm font-medium text-foreground">{boardLabel}</p>
 
       {/* Body */}
       <div className="max-h-[60vh] overflow-y-auto">
         {loading ? (
           <p className="px-2 py-4 text-center text-xs text-muted">Loading…</p>
-        ) : tab === "combined" ? (
+        ) : activeTab === "combined" ? (
           <CombinedList entries={combined ?? []} matchName={matchName} />
         ) : (
           <PerGameList entries={perGame ?? []} matchName={matchName} />

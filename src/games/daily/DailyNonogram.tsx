@@ -18,9 +18,17 @@ import {
 import { logCompletion } from "@/games/nonogram/history";
 import { formatTime } from "@/lib/gameUtils";
 import { useBoardSize, DAILY_BOARD } from "@/lib/useBoardSize";
+import { PausedRules } from "@/components/games/PausedRules";
+import { useAutoPause } from "@/lib/useAutoPause";
 
 const ROWS = 7;
 const COLS = 7;
+
+const NONOGRAM_RULES = [
+  "Clues list the lengths of consecutive filled groups in each row and column.",
+  "Groups are separated by at least one empty cell.",
+  "Left-click to fill, right-click to mark a cross.",
+];
 
 function generateDailyPuzzle() {
   const seed = getDailySeed();
@@ -46,7 +54,6 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
   );
   const [errors, setErrors] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<[number, number] | null>(null);
-  const [mode, setMode] = useState<"fill" | "mark">("fill");
   const [paused, setPaused] = useState(true);
   const [won, setWon] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -71,6 +78,8 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [won, paused]);
+
+  useAutoPause(setPaused, won);
 
   // Auto-save
   useEffect(() => {
@@ -115,9 +124,9 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
   const handleCellClick = useCallback(
     (r: number, c: number) => {
       setSelected([r, c]);
-      applyToggle(r, c, mode);
+      applyToggle(r, c, "fill");
     },
-    [applyToggle, mode]
+    [applyToggle]
   );
 
   const handleCellRightClick = useCallback(
@@ -209,36 +218,10 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
         )}
       </div>
 
-      {/* Fill / Mark mode toggle */}
-      {!won && (
-        <div className="flex gap-1 rounded-md border border-border bg-card p-0.5 text-xs font-mono">
-          <button
-            onClick={() => setMode("fill")}
-            className={`rounded px-2.5 py-1 transition-colors ${
-              mode === "fill"
-                ? "bg-accent text-background"
-                : "text-muted hover:text-foreground"
-            }`}
-          >
-            Fill
-          </button>
-          <button
-            onClick={() => setMode("mark")}
-            className={`rounded px-2.5 py-1 transition-colors ${
-              mode === "mark"
-                ? "bg-accent/30 text-accent"
-                : "text-muted hover:text-foreground"
-            }`}
-          >
-            Mark ×
-          </button>
-        </div>
-      )}
-
       {/* Puzzle */}
       <div
         ref={boardRef}
-        className="relative flex w-full select-none flex-col items-center"
+        className="relative flex w-full select-none flex-col items-center mt-8"
       >
         {/* Column clues */}
         <div
@@ -346,15 +329,16 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
 
         {/* Pause overlay */}
         {paused && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-3">
             <span className="text-sm font-medium text-foreground tracking-wide">
-              Paused
+              {timer === 0 ? "Daily Nonogram" : "Paused"}
             </span>
+            <PausedRules rules={NONOGRAM_RULES} />
             <button
               onClick={() => setPaused(false)}
               className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-background transition-colors hover:bg-accent-hover"
             >
-              Resume
+              {timer === 0 ? "Start" : "Resume"}
             </button>
           </div>
         )}

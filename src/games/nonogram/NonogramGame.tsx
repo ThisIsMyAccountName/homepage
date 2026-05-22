@@ -74,7 +74,6 @@ export function NonogramGame() {
   const [errors, setErrors] = useState<Set<string>>(new Set());
   const [errorCount, setErrorCount] = useState(0);
   const [selected, setSelected] = useState<[number, number] | null>(null);
-  const [mode, setMode] = useState<"fill" | "mark">("fill");
   const [won, setWon] = useState(false);
   const [copied, setCopied] = useState(false);
   const [pendingNewSizeIdx, setPendingNewSizeIdx] = useState<number | null>(null);
@@ -303,32 +302,6 @@ export function NonogramGame() {
             </div>
           </div>
 
-          {/* Mode toggle */}
-          {!won && (
-            <div className="flex gap-1 rounded-md border border-border bg-card p-0.5 text-xs font-mono">
-              <button
-                onClick={() => setMode("fill")}
-                className={`rounded px-2.5 py-1 transition-colors ${
-                  mode === "fill"
-                    ? "bg-accent text-background"
-                    : "text-muted hover:text-foreground"
-                }`}
-              >
-                Fill
-              </button>
-              <button
-                onClick={() => setMode("mark")}
-                className={`rounded px-2.5 py-1 transition-colors ${
-                  mode === "mark"
-                    ? "bg-accent/30 text-accent"
-                    : "text-muted hover:text-foreground"
-                }`}
-              >
-                Mark ×
-              </button>
-            </div>
-          )}
-
           {/* Puzzle grid */}
           <div className="select-none overflow-x-auto">
             {/* Column clues */}
@@ -387,7 +360,7 @@ export function NonogramGame() {
                         style={{ width: cellSize, height: cellSize }}
                         onClick={() => {
                           setSelected([r, c]);
-                          applyToggle(r, c, mode);
+                          applyToggle(r, c, "fill");
                         }}
                         onContextMenu={(e) => {
                           e.preventDefault();

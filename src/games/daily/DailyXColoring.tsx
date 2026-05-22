@@ -13,6 +13,14 @@ import { logCompletion } from "@/games/x-coloring/history";
 import { GraphBoard } from "@/components/games/GraphBoard";
 import { formatTime } from "@/lib/gameUtils";
 import { useBoardSize, DAILY_BOARD } from "@/lib/useBoardSize";
+import { PausedRules } from "@/components/games/PausedRules";
+import { useAutoPause } from "@/lib/useAutoPause";
+
+const X_COLORING_RULES = [
+  "Color every node so no two nodes joined by an edge share a color.",
+  "Dashed edges link nodes that must also not share a color.",
+  "Ringed nodes must have all neighbours in different colors.",
+];
 
 /** Daily puzzle is always Hard so everyone faces the same full-featured puzzle. */
 const DAILY_DIFFICULTY = "hard" as const;
@@ -87,6 +95,8 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [won, paused]);
+
+  useAutoPause(setPaused, won);
 
   // Auto-save
   useEffect(() => {
@@ -220,10 +230,11 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
           />
         </div>
         {paused && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-3">
             <span className="text-sm font-medium text-foreground tracking-wide">
-              {timer === 0 ? "Daily Puzzle" : "Paused"}
+              {timer === 0 ? "Daily X-Coloring" : "Paused"}
             </span>
+            <PausedRules rules={X_COLORING_RULES} />
             <button
               onClick={() => setPaused(false)}
               className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-background transition-colors hover:bg-accent-hover"

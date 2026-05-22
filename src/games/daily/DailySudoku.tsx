@@ -16,6 +16,13 @@ import {
 } from "@/games/sudoku/session";
 import { formatTime } from "@/lib/gameUtils";
 import { useBoardSize, DAILY_BOARD } from "@/lib/useBoardSize";
+import { PausedRules } from "@/components/games/PausedRules";
+import { useAutoPause } from "@/lib/useAutoPause";
+
+const SUDOKU_RULES = [
+  "Fill every row, column, and 2×3 box with digits 1–6.",
+  "No digit may repeat in a row, column, or box.",
+];
 
 function generateDailyGame(): { puzzle: Board; solution: Board; board: Board } {
   const seed = getDailySeed();
@@ -76,6 +83,8 @@ export function DailySudoku({ onComplete }: DailySudokuProps) {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [paused, won]);
+
+  useAutoPause(setPaused, won);
 
   // Auto-save the in-progress daily puzzle
   useEffect(() => {
@@ -163,6 +172,11 @@ export function DailySudoku({ onComplete }: DailySudokuProps) {
   const isGiven = (r: number, c: number) => puzzle[r][c] !== null;
   const isSelected = (r: number, c: number) =>
     selected !== null && selected[0] === r && selected[1] === c;
+  const selectedValue = selected ? board[selected[0]][selected[1]] : null;
+  const isSameValue = (r: number, c: number) =>
+    selectedValue !== null &&
+    board[r][c] === selectedValue &&
+    !isSelected(r, c);
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -205,6 +219,7 @@ export function DailySudoku({ onComplete }: DailySudokuProps) {
             let bg = "bg-card";
             if (isSelected(r, c)) bg = "bg-accent/20";
             else if (isError(r, c)) bg = "bg-red-500/20";
+            else if (isSameValue(r, c)) bg = "bg-accent/10";
 
             return (
               <button
@@ -220,8 +235,7 @@ export function DailySudoku({ onComplete }: DailySudokuProps) {
                   ${bottomBox ? "border-b-2 border-b-foreground/60" : "border-b border-b-border"}
                   ${c === 5 ? "!border-r-0" : ""}
                   ${r === 5 ? "!border-b-0" : ""}
-                  ${isGiven(r, c) ? "text-foreground" : "text-accent"}
-                  ${isError(r, c) ? "!text-red-400" : ""}
+                  ${isError(r, c) ? "!text-red-400" : isSameValue(r, c) ? "!text-accent" : isGiven(r, c) ? "text-foreground" : "text-accent"}
                   hover:bg-accent/10
                 `}
               >
@@ -232,10 +246,11 @@ export function DailySudoku({ onComplete }: DailySudokuProps) {
         )}
       </div>
         {paused && !won && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-3">
             <span className="text-sm font-medium text-foreground tracking-wide">
               {timer === 0 ? "Daily Sudoku" : "Paused"}
             </span>
+            <PausedRules rules={SUDOKU_RULES} />
             <button
               onClick={() => setPaused(false)}
               className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-background transition-colors hover:bg-accent-hover"

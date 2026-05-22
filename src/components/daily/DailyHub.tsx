@@ -214,9 +214,9 @@ export function DailyHub() {
     [active, progress]
   );
 
-  // Pick a sensible initial leaderboard tab — the active game, or combined
-  // when sitting on the recap.
-  const lbInitial = active === "recap" ? "combined" : active;
+  // Leaderboard tab follows the active step — same game when on a puzzle,
+  // combined when sitting on the recap. The panel resyncs on every change.
+  const lbTab = active === "recap" ? "combined" : active;
 
   return (
     <section className="flex flex-col gap-6">
@@ -294,7 +294,7 @@ export function DailyHub() {
           </h3>
           <DailyLeaderboardPanel
             refreshKey={refreshKey}
-            initialTab={lbInitial}
+            activeTab={lbTab}
             highlightName={submittedName}
           />
         </aside>
@@ -318,7 +318,7 @@ export function DailyHub() {
             <div className="border-t border-border p-4">
               <DailyLeaderboardPanel
                 refreshKey={refreshKey}
-                initialTab={lbInitial}
+                activeTab={lbTab}
                 highlightName={submittedName}
               />
             </div>
