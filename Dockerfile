@@ -12,7 +12,7 @@ WORKDIR /app
 # git is needed at build time: `npm run build` runs the prebuild hook, which
 # clones the Dimensional Alchemy game into public/games/idealer (it is not
 # committed to this repo). Build requires network access to GitHub.
-RUN apk add --no-cache git
+RUN apk add --no-cache git bash
 
 ARG NEXT_PUBLIC_SITE_NAME
 ARG NEXT_PUBLIC_SITE_TITLE
