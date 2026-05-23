@@ -3,7 +3,7 @@
  * pool loader) and client (board, daily wrapper, history).
  */
 
-/** Raw record from `data/cryptic-clues.json`. The object is keyed by answer. */
+/** Raw record from `src/games/cryptic/data/cryptic-clues.json`. The object is keyed by answer. */
 export interface RawClueValue {
   clue: string;
   pattern: string;

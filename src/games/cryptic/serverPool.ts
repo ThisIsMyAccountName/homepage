@@ -1,8 +1,9 @@
 /**
  * Server-only loader for the cryptic clue pool. Reads
- * `data/cryptic-clues.json` (user-supplied, gitignored) with a module-scope
- * cache invalidated by file mtime; falls back to the small committed pool
- * at `./data/cryptic-fallback.json` when the user file is missing.
+ * `src/games/cryptic/data/cryptic-clues.json` (user-supplied, gitignored)
+ * with a module-scope cache invalidated by file mtime; falls back to the
+ * small committed pool at `./data/cryptic-fallback.json` when the user
+ * file is missing.
  *
  * Each entry is normalized through `parsePattern` / `parseClue` and dropped
  * if it fails validation, so a bad row in the dataset never crashes a
@@ -20,7 +21,14 @@ import fallbackData from "./data/cryptic-fallback.json";
 import { compactAnswer, parseClue, parsePattern } from "./parsing";
 import type { CrypticEntry, RawClueValue } from "./types";
 
-const DATA_FILE = path.join(process.cwd(), "data", "cryptic-clues.json");
+const DATA_FILE = path.join(
+  process.cwd(),
+  "src",
+  "games",
+  "cryptic",
+  "data",
+  "cryptic-clues.json"
+);
 
 const MIN_LETTERS = 4;
 const MAX_LETTERS = 15;

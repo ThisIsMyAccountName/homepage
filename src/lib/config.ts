@@ -29,6 +29,7 @@ export const navigation: NavItem[] = [
       { label: "X Coloring", href: "/games/x-coloring" },
       { label: "Flow", href: "/games/flow" },
       { label: "Crossword", href: "/games/crossword" },
+      { label: "Cryptic", href: "/games/cryptic" },
     ],
   },
   { label: "Files", href: "/files" },

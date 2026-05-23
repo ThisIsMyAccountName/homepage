@@ -4,9 +4,9 @@
  * Body: `{ "key": "SEDATE" }`
  *
  * Three things happen:
- *  1. The key is removed from `data/cryptic-clues.json` (the source
- *     dataset). Silently skips if the file isn't accessible (e.g. a
- *     Docker standalone build where /data isn't mounted).
+ *  1. The key is removed from `src/games/cryptic/data/cryptic-clues.json`
+ *     (the source dataset). Silently skips if the file isn't accessible
+ *     (e.g. a Docker standalone build where the source tree isn't present).
  *  2. The deletion is logged to `data/cryptic-deleted-clues.json` so the
  *     maintainer can re-apply it after a dataset restore.
  *  3. The clue is removed from `cryptic-flagged.json` and
@@ -21,7 +21,14 @@ import { readJsonFile, writeJsonFile } from "@/lib/apiUtils";
 export const runtime = "nodejs";
 
 const DATA_DIR = path.join(process.cwd(), "data");
-const CLUES_FILE = path.join(DATA_DIR, "cryptic-clues.json");
+const CLUES_FILE = path.join(
+  process.cwd(),
+  "src",
+  "games",
+  "cryptic",
+  "data",
+  "cryptic-clues.json"
+);
 const FLAGGED_FILE = path.join(DATA_DIR, "cryptic-flagged.json");
 const GOOD_FILE = path.join(DATA_DIR, "cryptic-good.json");
 const DELETED_FILE = path.join(DATA_DIR, "cryptic-deleted-clues.json");

@@ -11,6 +11,7 @@ import {
 import { formatTime } from "@/lib/gameUtils";
 import { useAutoPause } from "@/lib/useAutoPause";
 import { PausedRules } from "@/components/games/PausedRules";
+import { ConfirmDialog } from "@/components/games/ConfirmDialog";
 import { compactAnswer, parseClue, parsePattern } from "./parsing";
 import { rateCryptic } from "./fetch";
 import type { CrypticDailySession } from "./session";
@@ -78,6 +79,7 @@ export function ClueBoard({
   const [upStatus, setUpStatus] = useState<"idle" | "submitting" | "done" | "error">("idle");
   const [downStatus, setDownStatus] = useState<"idle" | "submitting" | "done" | "error">("idle");
   const [voteMessage, setVoteMessage] = useState<string | null>(null);
+  const [confirmNew, setConfirmNew] = useState(false);
 
   const hiddenInputRef = useRef<HTMLInputElement>(null);
 
@@ -97,6 +99,7 @@ export function ClueBoard({
     setUpStatus("idle");
     setDownStatus("idle");
     setVoteMessage(null);
+    setConfirmNew(false);
   }, [entry.id, totalCells, variant]);
 
   // Hydrate sticky vote state per clue.
@@ -537,7 +540,43 @@ export function ClueBoard({
         >
           Reveal a letter (+1)
         </button>
+        {showThumbs && !solved && (
+          <button
+            type="button"
+            onClick={() => submitVote("down")}
+            disabled={paused || downStatus === "submitting" || downStatus === "done"}
+            className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-muted transition-colors hover:bg-card-hover hover:text-foreground disabled:opacity-50"
+            title="Flag this clue for review"
+          >
+            {downStatus === "done" ? "👎 Flagged" : downStatus === "submitting" ? "Flagging…" : "👎 Bad clue"}
+          </button>
+        )}
+        {variant === "free" && onNext && !solved && (
+          <button
+            type="button"
+            onClick={() => {
+              if (timer > 0) setConfirmNew(true);
+              else onNext();
+            }}
+            className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-muted transition-colors hover:bg-card-hover hover:text-foreground"
+          >
+            New cryptic
+          </button>
+        )}
       </div>
+
+      {confirmNew && (
+        <ConfirmDialog
+          title="Abandon this clue?"
+          message="Your progress on the current clue will be lost."
+          confirmLabel="Yes, new clue"
+          onConfirm={() => {
+            setConfirmNew(false);
+            onNext?.();
+          }}
+          onCancel={() => setConfirmNew(false)}
+        />
+      )}
 
       {/* Post-solve panel */}
       {solved && (

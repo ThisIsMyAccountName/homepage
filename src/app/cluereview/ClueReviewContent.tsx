@@ -448,7 +448,7 @@ function ReviewView({ password }: { password: string }) {
           </code>
           . Source dataset edits are written to{" "}
           <code className="font-mono text-amber-300/90">
-            data/cryptic-clues.json
+            src/games/cryptic/data/cryptic-clues.json
           </code>{" "}
           (both gitignored — survives git pulls).
         </div>

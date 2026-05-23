@@ -52,7 +52,8 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
   const [errorCount, setErrorCount] = useState(
     () => loadDailySession(todayKey, ROWS, COLS)?.errorCount ?? 0
   );
-  const [errors, setErrors] = useState<Set<string>>(new Set());
+  const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
+  const [errorCols, setErrorCols] = useState<Set<number>>(new Set());
   const [selected, setSelected] = useState<[number, number] | null>(null);
   const [paused, setPaused] = useState(true);
   const [won, setWon] = useState(false);
@@ -101,7 +102,8 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
       }
 
       setGrid(newGrid);
-      setErrors(new Set());
+      setErrorRows(new Set());
+      setErrorCols(new Set());
 
       if (isComplete(newGrid, puzzle.solution)) {
         setWon(true);
@@ -140,7 +142,14 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
 
   const checkBoard = useCallback(() => {
     const errs = getErrors(grid, puzzle.solution);
-    setErrors(new Set(errs.map(([r, c]) => `${r}-${c}`)));
+    const rows = new Set<number>();
+    const cols = new Set<number>();
+    for (const [r, c] of errs) {
+      rows.add(r);
+      cols.add(c);
+    }
+    setErrorRows(rows);
+    setErrorCols(cols);
     if (errs.length > 0) setErrorCount((n) => n + errs.length);
   }, [grid, puzzle.solution]);
 
@@ -231,6 +240,7 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
           {colClues.map((clue, c) => {
             const colLine = grid.map((row) => row[c]);
             const satisfied = isLineSatisfied(colLine, clue);
+            const isErr = errorCols.has(c);
             return (
               <div
                 key={c}
@@ -241,7 +251,11 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
                   <span
                     key={i}
                     className={`font-mono ${
-                      satisfied ? "text-foreground/25" : "text-muted"
+                      isErr
+                        ? "text-red-400"
+                        : satisfied
+                          ? "text-foreground/25"
+                          : "text-muted"
                     }`}
                   >
                     {n === 0 ? " " : n}
@@ -261,6 +275,7 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
         >
           {grid.map((row, r) => {
             const satisfied = isLineSatisfied(row, rowClues[r]);
+            const isErr = errorRows.has(r);
             return (
               <div key={r} className="flex">
                 {/* Row clue */}
@@ -272,7 +287,11 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
                     <span
                       key={i}
                       className={`font-mono text-[11px] ${
-                        satisfied ? "text-foreground/25" : "text-muted"
+                        isErr
+                          ? "text-red-400"
+                          : satisfied
+                            ? "text-foreground/25"
+                            : "text-muted"
                       }`}
                     >
                       {n === 0 ? " " : n}
@@ -281,7 +300,6 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
                 </div>
                 {/* Cells */}
                 {row.map((cell, c) => {
-                  const isErr = errors.has(`${r}-${c}`);
                   const isSel =
                     selected?.[0] === r && selected?.[1] === c;
                   return (
@@ -296,11 +314,8 @@ export function DailyNonogram({ onComplete }: DailyNonogramProps) {
                       onContextMenu={(e) => handleCellRightClick(e, r, c)}
                       className={[
                         "border border-border flex items-center justify-center text-xs font-mono transition-colors",
-                        cell === "filled" && !isErr
+                        cell === "filled"
                           ? "bg-accent border-accent text-background"
-                          : "",
-                        cell === "filled" && isErr
-                          ? "bg-red-500/40 border-red-400"
                           : "",
                         cell === "marked"
                           ? "bg-card text-muted"

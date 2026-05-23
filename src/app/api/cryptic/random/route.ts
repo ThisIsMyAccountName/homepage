@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
   if (!entry) {
     return NextResponse.json(
-      { error: "No cryptic clues available. Drop cryptic-clues.json in /data." },
+      { error: "No cryptic clues available. Drop cryptic-clues.json in src/games/cryptic/data." },
       { status: 503 }
     );
   }

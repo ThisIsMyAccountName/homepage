@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getTodayKey } from "@/lib/daily";
 import { ClueBoard } from "@/games/cryptic/ClueBoard";
 import { fetchDailyCryptic } from "@/games/cryptic/fetch";
@@ -22,18 +22,17 @@ export function DailyCryptic({ onComplete }: DailyCrypticProps) {
   const [entry, setEntry] = useState<CrypticResponse | null>(null);
   const [initial, setInitial] = useState<CrypticDailySession | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const fetchedRef = useRef(false);
 
   useEffect(() => {
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
     const ac = new AbortController();
     fetchDailyCryptic(todayKey, ac.signal)
       .then((res) => {
+        if (ac.signal.aborted) return;
         setEntry(res);
         setInitial(loadDailySession(todayKey, res.id));
       })
       .catch((err: unknown) => {
+        if (ac.signal.aborted) return;
         setError(err instanceof Error ? err.message : "Failed to load daily cryptic");
       });
     return () => ac.abort();
@@ -59,7 +58,7 @@ export function DailyCryptic({ onComplete }: DailyCrypticProps) {
       <div className="flex flex-col items-center justify-center gap-2 p-8 text-sm">
         <p className="text-red-400">{error}</p>
         <p className="text-muted text-xs">
-          The maintainer needs to drop a cryptic-clues.json in /data.
+          The maintainer needs to drop a cryptic-clues.json in src/games/cryptic/data.
         </p>
       </div>
     );
