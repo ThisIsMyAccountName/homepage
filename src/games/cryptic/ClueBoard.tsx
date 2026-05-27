@@ -14,6 +14,7 @@ import { PausedRules } from "@/components/games/PausedRules";
 import { ConfirmDialog } from "@/components/games/ConfirmDialog";
 import { compactAnswer, parseClue, parsePattern } from "./parsing";
 import { rateCryptic } from "./fetch";
+import { WordplayBreakdown } from "./WordplayBreakdown";
 import type { CrypticDailySession } from "./session";
 import type { CrypticResponse } from "./types";
 
@@ -34,6 +35,12 @@ interface ClueBoardProps {
   onNext?: () => void;
   /** Daily wrapper passes false to skip thumbs (they live on the completion card instead). */
   showThumbs?: boolean;
+  /**
+   * Revisit mode: mount with the answer cells filled in and solved=true.
+   * Skips the pause/start overlay so the player sees the completed clue
+   * straight away.
+   */
+  alreadySolved?: boolean;
 }
 
 export function ClueBoard({
@@ -44,6 +51,7 @@ export function ClueBoard({
   variant = "free",
   onNext,
   showThumbs = true,
+  alreadySolved = false,
 }: ClueBoardProps) {
   const pattern = useMemo(() => parsePattern(entry.pattern), [entry.pattern]);
   const parsed = useMemo(() => parseClue(entry.clue), [entry.clue]);
@@ -51,30 +59,38 @@ export function ClueBoard({
   const totalCells = pattern.totalLetters;
 
   const validInitial =
-    initialSession && initialSession.clueId === entry.id && initialSession.cells.length === totalCells
+    !alreadySolved &&
+    initialSession &&
+    initialSession.clueId === entry.id &&
+    initialSession.cells.length === totalCells
       ? initialSession
       : null;
 
-  const [cells, setCells] = useState<string[]>(() =>
-    validInitial ? [...validInitial.cells] : Array(totalCells).fill("")
-  );
+  const [cells, setCells] = useState<string[]>(() => {
+    if (alreadySolved) return targetCompact.split("");
+    return validInitial ? [...validInitial.cells] : Array(totalCells).fill("");
+  });
   const [revealed, setRevealed] = useState<Set<number>>(
     () => new Set(validInitial?.revealed ?? [])
   );
   const [defRevealed, setDefRevealed] = useState<boolean>(
-    validInitial?.defRevealed ?? false
+    alreadySolved ? true : validInitial?.defRevealed ?? false
   );
   const [errorCount, setErrorCount] = useState<number>(
-    validInitial?.errorCount ?? 0
+    alreadySolved ? 0 : validInitial?.errorCount ?? 0
   );
-  const [timer, setTimer] = useState<number>(validInitial?.timer ?? 0);
-  const [paused, setPaused] = useState<boolean>(variant === "daily");
+  const [timer, setTimer] = useState<number>(
+    alreadySolved ? 0 : validInitial?.timer ?? 0
+  );
+  const [paused, setPaused] = useState<boolean>(
+    alreadySolved ? false : variant === "daily"
+  );
   const [caret, setCaret] = useState<number>(() => {
     if (!validInitial) return 0;
     const firstEmpty = validInitial.cells.findIndex((c, i) => !c && !validInitial.revealed.includes(i));
     return firstEmpty >= 0 ? firstEmpty : 0;
   });
-  const [solved, setSolved] = useState<boolean>(false);
+  const [solved, setSolved] = useState<boolean>(alreadySolved);
   const [shake, setShake] = useState<boolean>(false);
   const [upStatus, setUpStatus] = useState<"idle" | "submitting" | "done" | "error">("idle");
   const [downStatus, setDownStatus] = useState<"idle" | "submitting" | "done" | "error">("idle");
@@ -589,13 +605,11 @@ export function ClueBoard({
               {entry.answer}
             </p>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-2">
             <span className="font-mono text-[11px] uppercase tracking-wider text-muted">
               Wordplay
             </span>
-            <p className="font-mono text-sm leading-relaxed text-foreground">
-              {entry.wordplay || "—"}
-            </p>
+            <WordplayBreakdown wordplay={entry.wordplay} answer={entry.answer} />
           </div>
 
           {showThumbs && (

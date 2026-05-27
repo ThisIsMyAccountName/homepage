@@ -28,6 +28,8 @@ export interface ColoringOptions {
   uniqueNodes?: ReadonlySet<number>;
   /** Non-adjacent node pairs that must not share a color. */
   forbiddenPairs?: readonly { a: number; b: number }[];
+  /** Node → color pre-assignments that the solution must respect. */
+  pinned?: Readonly<Record<number, number>>;
 }
 
 /**
@@ -44,6 +46,7 @@ export function findColoring(
   const adj = adjacency(graph);
   const colors = new Array<number>(n).fill(-1);
   const uniqueNodes = opts.uniqueNodes;
+  const pinned = opts.pinned;
 
   // Order nodes by descending degree — fail fast on hard nodes. Unique-node
   // neighbours get a slight priority bump since their assignments are the
@@ -96,6 +99,17 @@ export function findColoring(
   const tryAssign = (i: number): boolean => {
     if (i === n) return true;
     const node = order[i];
+    // Pinned nodes have a forced color — try only that one (must be in
+    // range and safe; otherwise the whole branch is infeasible).
+    if (pinned && Object.prototype.hasOwnProperty.call(pinned, node)) {
+      const forced = pinned[node];
+      if (forced < 0 || forced >= k) return false;
+      if (!isSafe(node, forced)) return false;
+      colors[node] = forced;
+      if (tryAssign(i + 1)) return true;
+      colors[node] = -1;
+      return false;
+    }
     for (let c = 0; c < k; c++) {
       if (!isSafe(node, c)) continue;
       colors[node] = c;

@@ -23,15 +23,6 @@ interface DailyCompletionCardProps {
   /** Whether the player just won this in-session (vs revisiting a completed step). */
   justWon: boolean;
   /**
-   * Optional secondary action — currently only wired up for crossword to
-   * surface a "View solution" link. When provided, a low-emphasis text
-   * button is rendered just below the primary CTA.
-   */
-  secondaryAction?: {
-    label: string;
-    onClick: () => void;
-  };
-  /**
    * Optional puzzle identifier. When the active game is crossword and a
    * stable id is available, the card surfaces a 👍 / 👎 vote pair so
    * the player can promote today's puzzle into the approved pool or
@@ -41,9 +32,9 @@ interface DailyCompletionCardProps {
 }
 
 /**
- * Replaces the puzzle board once the daily game is solved (or when the user
- * revisits a completed step from the stepper). Shows time/errors, share +
+ * Renders below the completed daily puzzle. Shows time/errors, share +
  * submit, and a prominent "Next: …" CTA so the daily flow keeps moving.
+ * The puzzle itself stays mounted in its solved state above this card.
  */
 export function DailyCompletionCard({
   game,
@@ -53,7 +44,6 @@ export function DailyCompletionCard({
   onAdvance,
   advanceLabel,
   justWon,
-  secondaryAction,
   crosswordPuzzleId,
 }: DailyCompletionCardProps) {
   // If the puzzle was completed before this session and we don't know the
@@ -102,19 +92,8 @@ export function DailyCompletionCard({
         {advanceLabel} →
       </button>
 
-      {secondaryAction && (
-        <button
-          type="button"
-          onClick={secondaryAction.onClick}
-          className="text-xs text-muted underline-offset-2 transition-colors hover:text-foreground hover:underline"
-        >
-          {secondaryAction.label}
-        </button>
-      )}
-
       {/* Crossword-only: surface up/down votes once the player has
-          solved today's puzzle. Lives below the secondary action so the
-          primary "go to next" CTA is still the visual anchor. */}
+          solved today's puzzle. */}
       {game === "crossword" && crosswordPuzzleId && !unknownTime && (
         <CrosswordVoteButtons puzzleId={crosswordPuzzleId} />
       )}

@@ -15,9 +15,18 @@ import type { CrypticResponse } from "@/games/cryptic/types";
 interface DailyCrypticProps {
   /** Fires once when the daily puzzle is solved. */
   onComplete: (time: number, errors: number) => void;
+  /**
+   * Revisit mode: mount with the answer filled in and solved=true so the
+   * player sees the solved board (and the post-solve answer/wordplay
+   * panel) without being prompted to play again.
+   */
+  alreadySolved?: boolean;
 }
 
-export function DailyCryptic({ onComplete }: DailyCrypticProps) {
+export function DailyCryptic({
+  onComplete,
+  alreadySolved = false,
+}: DailyCrypticProps) {
   const todayKey = getTodayKey();
   const [entry, setEntry] = useState<CrypticResponse | null>(null);
   const [initial, setInitial] = useState<CrypticDailySession | null>(null);
@@ -80,6 +89,7 @@ export function DailyCryptic({ onComplete }: DailyCrypticProps) {
       onSessionChange={handleSessionChange}
       variant="daily"
       showThumbs
+      alreadySolved={alreadySolved}
     />
   );
 }

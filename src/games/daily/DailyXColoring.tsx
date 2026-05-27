@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { getDailySeed, getTodayKey } from "@/lib/daily";
-import { conflicts as computeConflicts } from "@/lib/graph";
+import { conflicts as computeConflicts, findColoring } from "@/lib/graph";
 import { generatePuzzle } from "@/games/x-coloring/generator";
 import {
   saveDailySession,
@@ -43,24 +43,45 @@ function applyGivens(
 
 interface DailyXColoringProps {
   onComplete: (time: number, errors: number) => void;
+  /** Revisit mode: mount with a valid coloring, won=true, no overlay. */
+  alreadySolved?: boolean;
 }
 
-export function DailyXColoring({ onComplete }: DailyXColoringProps) {
+export function DailyXColoring({
+  onComplete,
+  alreadySolved = false,
+}: DailyXColoringProps) {
   const todayKey = getTodayKey();
   const [puzzle] = useState(() =>
     generatePuzzle(DAILY_DIFFICULTY, getDailySeed())
   );
-  const initial = loadDailySession(todayKey);
-  const baseColoring =
-    initial?.coloring && initial.coloring.length === puzzle.graph.nodes.length
-      ? initial.coloring
-      : emptyColoring(puzzle.graph.nodes.length);
+  const initial = alreadySolved ? null : loadDailySession(todayKey);
+  // For revisit, compute a valid coloring honoring givens / uniques /
+  // forbidden pairs. Falls back to givens-only if no full solution is
+  // found (shouldn't happen for the daily, but keeps the UI safe).
+  const solvedColoring = useMemo<number[] | null>(() => {
+    if (!alreadySolved) return null;
+    const uniqueSet = new Set(puzzle.uniqueNeighbourNodes);
+    const found = findColoring(puzzle.graph, puzzle.colors, {
+      uniqueNodes: uniqueSet,
+      forbiddenPairs: puzzle.forbiddenPairs,
+      pinned: puzzle.givens,
+    });
+    return found ?? null;
+  }, [alreadySolved, puzzle]);
+  const baseColoring = solvedColoring
+    ? solvedColoring
+    : initial?.coloring && initial.coloring.length === puzzle.graph.nodes.length
+    ? initial.coloring
+    : emptyColoring(puzzle.graph.nodes.length);
   // Re-apply givens defensively (session may predate the locked-node feature).
   const [coloring, setColoring] = useState<number[]>(() =>
     applyGivens(puzzle.givens, baseColoring)
   );
-  const [timer, setTimer] = useState(initial?.timer ?? 0);
-  const [errorCount, setErrorCount] = useState(initial?.errorCount ?? 0);
+  const [timer, setTimer] = useState(alreadySolved ? 0 : initial?.timer ?? 0);
+  const [errorCount, setErrorCount] = useState(
+    alreadySolved ? 0 : initial?.errorCount ?? 0
+  );
   const [shownConflicts, setShownConflicts] = useState<{
     edges: Set<number>;
     uniqueViolators: Set<number>;
@@ -69,8 +90,8 @@ export function DailyXColoring({ onComplete }: DailyXColoringProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const [brush, setBrush] = useState<number>(0);
   // Daily games start paused (matches sudoku/nonogram convention).
-  const [paused, setPaused] = useState(true);
-  const [won, setWon] = useState(false);
+  const [paused, setPaused] = useState(!alreadySolved);
+  const [won, setWon] = useState(alreadySolved);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const givenNodes = useMemo(

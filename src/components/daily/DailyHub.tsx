@@ -23,13 +23,23 @@ import {
   type DailyProgress,
 } from "@/lib/dailyProgress";
 
+interface SolvableGameProps {
+  onComplete: (time: number, errors: number) => void;
+  /**
+   * If true, the game mounts in its solved state (board filled with the
+   * solution, timer/pause hidden). Used when the player revisits a daily
+   * step they finished in an earlier session.
+   */
+  alreadySolved?: boolean;
+}
+
 const GameLoader = (
   <div className="flex items-center justify-center p-8 text-sm text-muted">
     Loading daily puzzle...
   </div>
 );
 
-const DailySudoku = dynamic(
+const DailySudoku = dynamic<SolvableGameProps>(
   () =>
     import("@/games/daily/DailySudoku").then((m) => ({
       default: m.DailySudoku,
@@ -37,7 +47,7 @@ const DailySudoku = dynamic(
   { ssr: false, loading: () => GameLoader }
 );
 
-const DailyNonogram = dynamic(
+const DailyNonogram = dynamic<SolvableGameProps>(
   () =>
     import("@/games/daily/DailyNonogram").then((m) => ({
       default: m.DailyNonogram,
@@ -45,7 +55,7 @@ const DailyNonogram = dynamic(
   { ssr: false, loading: () => GameLoader }
 );
 
-const DailyXColoring = dynamic(
+const DailyXColoring = dynamic<SolvableGameProps>(
   () =>
     import("@/games/daily/DailyXColoring").then((m) => ({
       default: m.DailyXColoring,
@@ -53,7 +63,10 @@ const DailyXColoring = dynamic(
   { ssr: false, loading: () => GameLoader }
 );
 
-const DailyCrossword = dynamic(
+const DailyCrossword = dynamic<{
+  onComplete: (time: number, errors: number, puzzleId: string) => void;
+  alreadySolved?: boolean;
+}>(
   () =>
     import("@/games/daily/DailyCrossword").then((m) => ({
       default: m.DailyCrossword,
@@ -61,18 +74,10 @@ const DailyCrossword = dynamic(
   { ssr: false, loading: () => GameLoader }
 );
 
-const DailyCryptic = dynamic(
+const DailyCryptic = dynamic<SolvableGameProps>(
   () =>
     import("@/games/daily/DailyCryptic").then((m) => ({
       default: m.DailyCryptic,
-    })),
-  { ssr: false, loading: () => GameLoader }
-);
-
-const DailyCrosswordSolution = dynamic(
-  () =>
-    import("@/games/daily/DailyCrosswordSolution").then((m) => ({
-      default: m.DailyCrosswordSolution,
     })),
   { ssr: false, loading: () => GameLoader }
 );
@@ -85,7 +90,7 @@ const DailyCrosswordSolution = dynamic(
  */
 const SIMPLE_GAME_COMPONENT: Record<
   Exclude<DailyGameId, "crossword">,
-  React.ComponentType<{ onComplete: (time: number, errors: number) => void }>
+  React.ComponentType<SolvableGameProps>
 > = {
   sudoku: DailySudoku,
   nonogram: DailyNonogram,
@@ -119,12 +124,6 @@ export function DailyHub() {
   const [submittedName, setSubmittedName] = useState<string | null>(null);
   // Mobile-only: lets the user collapse the leaderboard.
   const [mobileLbOpen, setMobileLbOpen] = useState(false);
-  // Crossword-specific: lets the player view today's solution from the
-  // completion card. We only need this for crossword — sudoku and friends
-  // don't have a meaningful "solution view" beyond the board they just
-  // finished. Resets if the active step changes.
-  const [viewingCrosswordSolution, setViewingCrosswordSolution] =
-    useState(false);
   // Stable id of today's crossword puzzle. Populated either by:
   //   (a) the player solving it in this session (fast path — comes
   //       through `handleCrosswordComplete`), or
@@ -196,9 +195,6 @@ export function DailyHub() {
 
   const advanceFrom = useCallback(
     (game: DailyGameId) => {
-      // Always drop out of solution view when leaving the step — the
-      // completion card is the canonical landing screen.
-      setViewingCrosswordSolution(false);
       const idx = DAILY_GAMES.indexOf(game);
       const next = DAILY_GAMES[idx + 1];
       if (next) setActive(next);
@@ -208,8 +204,6 @@ export function DailyHub() {
   );
 
   const setActiveSafe = useCallback((step: Step) => {
-    // Switching steps invalidates the crossword solution-view flag.
-    setViewingCrosswordSolution(false);
     setActive(step);
   }, []);
 
@@ -257,42 +251,39 @@ export function DailyHub() {
             ) : (
               <RecapPreview progress={progress} onJump={setActiveSafe} />
             )
-          ) : activeRecord ? (
-            active === "crossword" && viewingCrosswordSolution ? (
-              <DailyCrosswordSolution
-                onBack={() => setViewingCrosswordSolution(false)}
-              />
-            ) : (
-              <DailyCompletionCard
-                game={active}
-                time={activeRecord.time}
-                errors={activeRecord.errors}
-                onScoreSubmitted={handleScoreSubmitted}
-                onAdvance={() => advanceFrom(active)}
-                advanceLabel={ADVANCE_LABELS[active]}
-                justWon={justWon.has(active)}
-                secondaryAction={
-                  active === "crossword"
-                    ? {
-                        label: "View solution",
-                        onClick: () => setViewingCrosswordSolution(true),
-                      }
-                    : undefined
-                }
-                crosswordPuzzleId={
-                  active === "crossword" && todayCrosswordId
-                    ? todayCrosswordId
-                    : undefined
-                }
-              />
-            )
-          ) : active === "crossword" ? (
-            <DailyCrossword onComplete={handleCrosswordComplete} />
           ) : (
-            <SimpleActiveGame
-              game={active}
-              onComplete={(time, errors) => handleComplete(active, time, errors)}
-            />
+            <div className="flex flex-col gap-5">
+              {active === "crossword" ? (
+                <DailyCrossword
+                  onComplete={handleCrosswordComplete}
+                  alreadySolved={!!activeRecord}
+                />
+              ) : (
+                <SimpleActiveGame
+                  game={active}
+                  alreadySolved={!!activeRecord}
+                  onComplete={(time, errors) =>
+                    handleComplete(active, time, errors)
+                  }
+                />
+              )}
+              {activeRecord && (
+                <DailyCompletionCard
+                  game={active}
+                  time={activeRecord.time}
+                  errors={activeRecord.errors}
+                  onScoreSubmitted={handleScoreSubmitted}
+                  onAdvance={() => advanceFrom(active)}
+                  advanceLabel={ADVANCE_LABELS[active]}
+                  justWon={justWon.has(active)}
+                  crosswordPuzzleId={
+                    active === "crossword" && todayCrosswordId
+                      ? todayCrosswordId
+                      : undefined
+                  }
+                />
+              )}
+            </div>
           )}
         </div>
 
@@ -345,12 +336,14 @@ export function DailyHub() {
 function SimpleActiveGame({
   game,
   onComplete,
+  alreadySolved,
 }: {
   game: Exclude<DailyGameId, "crossword">;
   onComplete: (time: number, errors: number) => void;
+  alreadySolved: boolean;
 }) {
   const Component = SIMPLE_GAME_COMPONENT[game];
-  return <Component onComplete={onComplete} />;
+  return <Component onComplete={onComplete} alreadySolved={alreadySolved} />;
 }
 
 /**

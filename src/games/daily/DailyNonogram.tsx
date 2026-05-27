@@ -38,25 +38,41 @@ function generateDailyPuzzle() {
 
 interface DailyNonogramProps {
   onComplete: (time: number, errors: number) => void;
+  /**
+   * Revisit mode: mount with the solution filled in, won=true, no
+   * pause/start overlay, no input.
+   */
+  alreadySolved?: boolean;
 }
 
-export function DailyNonogram({ onComplete }: DailyNonogramProps) {
+function solutionGrid(solution: boolean[][]): Grid {
+  return solution.map((row) =>
+    row.map((cell) => (cell ? "filled" : "empty"))
+  );
+}
+
+export function DailyNonogram({
+  onComplete,
+  alreadySolved = false,
+}: DailyNonogramProps) {
   const todayKey = getTodayKey();
   const [puzzle] = useState(generateDailyPuzzle);
-  const [grid, setGrid] = useState<Grid>(
-    () => loadDailySession(todayKey, ROWS, COLS)?.grid ?? emptyGrid(ROWS, COLS)
+  const [grid, setGrid] = useState<Grid>(() =>
+    alreadySolved
+      ? solutionGrid(puzzle.solution)
+      : loadDailySession(todayKey, ROWS, COLS)?.grid ?? emptyGrid(ROWS, COLS)
   );
-  const [timer, setTimer] = useState(
-    () => loadDailySession(todayKey, ROWS, COLS)?.timer ?? 0
+  const [timer, setTimer] = useState(() =>
+    alreadySolved ? 0 : loadDailySession(todayKey, ROWS, COLS)?.timer ?? 0
   );
-  const [errorCount, setErrorCount] = useState(
-    () => loadDailySession(todayKey, ROWS, COLS)?.errorCount ?? 0
+  const [errorCount, setErrorCount] = useState(() =>
+    alreadySolved ? 0 : loadDailySession(todayKey, ROWS, COLS)?.errorCount ?? 0
   );
   const [errorRows, setErrorRows] = useState<Set<number>>(new Set());
   const [errorCols, setErrorCols] = useState<Set<number>>(new Set());
   const [selected, setSelected] = useState<[number, number] | null>(null);
-  const [paused, setPaused] = useState(true);
-  const [won, setWon] = useState(false);
+  const [paused, setPaused] = useState(!alreadySolved);
+  const [won, setWon] = useState(alreadySolved);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Largest square board that fits the column width and the screen height.

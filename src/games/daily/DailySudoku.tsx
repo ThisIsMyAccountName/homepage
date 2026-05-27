@@ -34,9 +34,19 @@ function generateDailyGame(): { puzzle: Board; solution: Board; board: Board } {
 interface DailySudokuProps {
   /** Fires the first time the board is solved. Parent decides what to show next. */
   onComplete: (time: number, errors: number) => void;
+  /**
+   * When true, the game mounts in its solved state: the board is filled
+   * with the solution, the timer/pause overlay is hidden, and no input
+   * is accepted. Used when the player revisits a step they completed in
+   * an earlier session.
+   */
+  alreadySolved?: boolean;
 }
 
-export function DailySudoku({ onComplete }: DailySudokuProps) {
+export function DailySudoku({
+  onComplete,
+  alreadySolved = false,
+}: DailySudokuProps) {
   const todayKey = getTodayKey();
   const [game, setGame] = useState<{
     puzzle: Board;
@@ -44,6 +54,13 @@ export function DailySudoku({ onComplete }: DailySudokuProps) {
     board: Board;
   } | null>(() => {
     const base = generateDailyGame();
+    if (alreadySolved) {
+      return {
+        puzzle: base.puzzle,
+        solution: base.solution,
+        board: base.solution.map((r) => [...r]),
+      };
+    }
     const saved = loadDailySession(todayKey, 6);
     if (saved) {
       return { puzzle: base.puzzle, solution: base.solution, board: saved.board };
@@ -53,13 +70,13 @@ export function DailySudoku({ onComplete }: DailySudokuProps) {
   const [selected, setSelected] = useState<[number, number] | null>(null);
   const [errors, setErrors] = useState<[number, number][]>([]);
   const [errorCount, setErrorCount] = useState(
-    () => loadDailySession(todayKey, 6)?.errorCount ?? 0
+    () => (alreadySolved ? 0 : loadDailySession(todayKey, 6)?.errorCount ?? 0)
   );
   const [timer, setTimer] = useState(
-    () => loadDailySession(todayKey, 6)?.timer ?? 0
+    () => (alreadySolved ? 0 : loadDailySession(todayKey, 6)?.timer ?? 0)
   );
-  const [paused, setPaused] = useState(true);
-  const [won, setWon] = useState(false);
+  const [paused, setPaused] = useState(!alreadySolved);
+  const [won, setWon] = useState(alreadySolved);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const config = CONFIGS[6];

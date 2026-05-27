@@ -69,9 +69,18 @@ interface DailyCrosswordProps {
    * completion card.
    */
   onComplete: (time: number, errors: number, puzzleId: string) => void;
+  /**
+   * Revisit mode: mount with the solution grid filled in, won=true, no
+   * pause overlay. Used when the player returns to a daily step they
+   * already finished in an earlier session.
+   */
+  alreadySolved?: boolean;
 }
 
-export function DailyCrossword({ onComplete }: DailyCrosswordProps) {
+export function DailyCrossword({
+  onComplete,
+  alreadySolved = false,
+}: DailyCrosswordProps) {
   const todayKey = getTodayKey();
   const [puzzle, setPuzzle] = useState<StoredPuzzle | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -122,6 +131,7 @@ export function DailyCrossword({ onComplete }: DailyCrosswordProps) {
       puzzle={puzzle}
       todayKey={todayKey}
       onComplete={onComplete}
+      alreadySolved={alreadySolved}
     />
   );
 }
@@ -130,16 +140,23 @@ interface InnerProps {
   puzzle: StoredPuzzle;
   todayKey: string;
   onComplete: (time: number, errors: number, puzzleId: string) => void;
+  alreadySolved: boolean;
 }
 
 /**
  * The actual game. Split out from the wrapper so the loading / error
  * branches above can early-return without violating rules-of-hooks.
  */
-function DailyCrosswordInner({ puzzle, todayKey, onComplete }: InnerProps) {
+function DailyCrosswordInner({
+  puzzle,
+  todayKey,
+  onComplete,
+  alreadySolved,
+}: InnerProps) {
   const puzzleId = puzzle.id;
 
   const [grid, setGrid] = useState<string[][]>(() => {
+    if (alreadySolved) return puzzle.solution.map((r) => [...r]);
     const saved = loadDailySession(
       todayKey,
       puzzleId,
@@ -155,17 +172,21 @@ function DailyCrosswordInner({ puzzle, todayKey, onComplete }: InnerProps) {
   // Cells highlighted green by the most recent Check pass. Cleared (per
   // cell) on any user input so feedback never stays stale.
   const [corrects, setCorrects] = useState<Set<string>>(() => new Set());
-  const [errorCount, setErrorCount] = useState<number>(
-    () =>
-      loadDailySession(todayKey, puzzleId, puzzle.rows, puzzle.cols)
-        ?.errorCount ?? 0
+  const [errorCount, setErrorCount] = useState<number>(() =>
+    alreadySolved
+      ? 0
+      : loadDailySession(todayKey, puzzleId, puzzle.rows, puzzle.cols)
+          ?.errorCount ?? 0
   );
-  const [timer, setTimer] = useState<number>(
-    () =>
-      loadDailySession(todayKey, puzzleId, puzzle.rows, puzzle.cols)?.timer ?? 0
+  const [timer, setTimer] = useState<number>(() =>
+    alreadySolved
+      ? 0
+      : loadDailySession(todayKey, puzzleId, puzzle.rows, puzzle.cols)?.timer ??
+        0
   );
-  const [paused, setPaused] = useState(true);
+  const [paused, setPaused] = useState(!alreadySolved);
   const [won, setWon] = useState<boolean>(() => {
+    if (alreadySolved) return true;
     const saved = loadDailySession(
       todayKey,
       puzzleId,
