@@ -100,21 +100,104 @@ export function isLineSatisfied(
   return JSON.stringify(actual) === JSON.stringify(clue);
 }
 
-export function isComplete(grid: Grid, solution: Solution): boolean {
-  for (let r = 0; r < solution.length; r++) {
-    for (let c = 0; c < solution[r].length; c++) {
-      if ((grid[r][c] === "filled") !== solution[r][c]) return false;
-    }
+export function isComplete(
+  grid: Grid,
+  rowClues: number[][],
+  colClues: number[][]
+): boolean {
+  for (let r = 0; r < grid.length; r++) {
+    if (!isLineSatisfied(grid[r], rowClues[r])) return false;
+  }
+  const cols = grid[0]?.length ?? 0;
+  for (let c = 0; c < cols; c++) {
+    const col = grid.map((row) => row[c]);
+    if (!isLineSatisfied(col, colClues[c])) return false;
   }
   return true;
 }
 
-/** Returns only cells the player wrongly filled (filled but should be empty). */
-export function getErrors(grid: Grid, solution: Solution): [number, number][] {
+/**
+ * Can the line's current filled cells extend to satisfy the clue?
+ * Treats `marked` as definitely empty, `empty` as "either", `filled` as definitely filled.
+ */
+function canLineMatchClue(line: CellState[], clue: number[]): boolean {
+  const n = line.length;
+  const hasFilled = line.some((c) => c === "filled");
+  if (clue.length === 1 && clue[0] === 0) return !hasFilled;
+
+  const memo = new Map<number, Map<number, boolean>>();
+  function solve(i: number, j: number): boolean {
+    if (j >= clue.length) {
+      for (let k = i; k < n; k++) {
+        if (line[k] === "filled") return false;
+      }
+      return true;
+    }
+    if (i >= n) return false;
+
+    let inner = memo.get(i);
+    if (inner?.has(j)) return inner.get(j)!;
+
+    const blockLen = clue[j];
+    let result = false;
+
+    if (i + blockLen <= n) {
+      let canPlace = true;
+      for (let k = i; k < i + blockLen; k++) {
+        if (line[k] === "marked") {
+          canPlace = false;
+          break;
+        }
+      }
+      if (canPlace) {
+        const after = i + blockLen;
+        if (after < n && line[after] === "filled") canPlace = false;
+        if (canPlace && solve(after + 1, j + 1)) result = true;
+      }
+    }
+
+    if (!result && line[i] !== "filled") {
+      if (solve(i + 1, j)) result = true;
+    }
+
+    if (!inner) {
+      inner = new Map();
+      memo.set(i, inner);
+    }
+    inner.set(j, result);
+    return result;
+  }
+
+  return solve(0, 0);
+}
+
+/**
+ * Returns filled cells that cannot possibly fit a valid arrangement of their
+ * row or column clue. With multiple valid solutions, only definitively wrong
+ * cells are flagged — not cells that merely disagree with a precomputed solution.
+ */
+export function getErrors(
+  grid: Grid,
+  rowClues: number[][],
+  colClues: number[][]
+): [number, number][] {
+  const rows = grid.length;
+  const cols = grid[0]?.length ?? 0;
+
+  const rowOk: boolean[] = grid.map((row, r) =>
+    canLineMatchClue(row, rowClues[r])
+  );
+  const colOk: boolean[] = Array.from({ length: cols }, (_, c) =>
+    canLineMatchClue(
+      grid.map((row) => row[c]),
+      colClues[c]
+    )
+  );
+
   const errors: [number, number][] = [];
-  for (let r = 0; r < solution.length; r++) {
-    for (let c = 0; c < solution[r].length; c++) {
-      if (grid[r][c] === "filled" && !solution[r][c]) {
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] === "filled" && (!rowOk[r] || !colOk[c])) {
         errors.push([r, c]);
       }
     }

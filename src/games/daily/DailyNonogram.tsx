@@ -121,7 +121,7 @@ export function DailyNonogram({
       setErrorRows(new Set());
       setErrorCols(new Set());
 
-      if (isComplete(newGrid, puzzle.solution)) {
+      if (isComplete(newGrid, puzzle.rowClues, puzzle.colClues)) {
         setWon(true);
         clearDailySession(todayKey);
         logCompletion({
@@ -136,7 +136,7 @@ export function DailyNonogram({
         onComplete(timer, errorCount);
       }
     },
-    [won, paused, grid, puzzle.solution, timer, errorCount, onComplete, todayKey]
+    [won, paused, grid, puzzle.rowClues, puzzle.colClues, timer, errorCount, onComplete, todayKey]
   );
 
   const handleCellClick = useCallback(
@@ -157,7 +157,7 @@ export function DailyNonogram({
   );
 
   const checkBoard = useCallback(() => {
-    const errs = getErrors(grid, puzzle.solution);
+    const errs = getErrors(grid, puzzle.rowClues, puzzle.colClues);
     const rows = new Set<number>();
     const cols = new Set<number>();
     for (const [r, c] of errs) {
@@ -167,7 +167,7 @@ export function DailyNonogram({
     setErrorRows(rows);
     setErrorCols(cols);
     if (errs.length > 0) setErrorCount((n) => n + errs.length);
-  }, [grid, puzzle.solution]);
+  }, [grid, puzzle.rowClues, puzzle.colClues]);
 
   // Keyboard navigation
   useEffect(() => {

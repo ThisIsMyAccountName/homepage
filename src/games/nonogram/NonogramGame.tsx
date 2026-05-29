@@ -168,7 +168,7 @@ export function NonogramGame() {
       setGame((g) => ({ ...g, grid: newGrid }));
       setErrors(new Set());
 
-      if (isComplete(newGrid, game.puzzle.solution)) {
+      if (isComplete(newGrid, game.puzzle.rowClues, game.puzzle.colClues)) {
         setWon(true);
         logCompletion({
           id: crypto.randomUUID(),
@@ -185,10 +185,10 @@ export function NonogramGame() {
   );
 
   const checkBoard = useCallback(() => {
-    const errs = getErrors(game.grid, game.puzzle.solution);
+    const errs = getErrors(game.grid, game.puzzle.rowClues, game.puzzle.colClues);
     setErrors(new Set(errs.map(([r, c]) => `${r}-${c}`)));
     if (errs.length > 0) setErrorCount((n) => n + errs.length);
-  }, [game.grid, game.puzzle.solution]);
+  }, [game.grid, game.puzzle.rowClues, game.puzzle.colClues]);
 
   const shareResult = useCallback(() => {
     navigator.clipboard.writeText(buildShareText(game.puzzle, game.timer, errorCount)).then(() => {

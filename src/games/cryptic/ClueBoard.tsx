@@ -404,8 +404,14 @@ export function ClueBoard({
         </div>
       </div>
 
-      {/* Clue card with pause overlay */}
-      <div className="relative w-full max-w-xl rounded-lg border border-border bg-card p-5">
+      {/* min-h reserves room for the pause overlay (rules + Start button)
+          so it doesn't overflow into the letter cells below, which would
+          paint over the Start button since they're a later `relative` sibling. */}
+      <div
+        className={`relative w-full max-w-xl rounded-lg border border-border bg-card p-5 ${
+          paused && !solved ? "min-h-[14rem]" : ""
+        }`}
+      >
         <div
           className={`transition-[filter] duration-200 ${
             paused && !solved ? "blur-md pointer-events-none select-none" : ""
