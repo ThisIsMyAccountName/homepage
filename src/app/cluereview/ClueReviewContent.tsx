@@ -47,6 +47,13 @@ interface CrypticDeletedEntry {
   deletedAt: number;
 }
 
+interface CrypticGoodEntry {
+  key: string;
+  clue: string;
+  pattern: string;
+  wordplay: string;
+}
+
 function authHeaders(pw: string): HeadersInit {
   return { "x-review-password": pw, "Content-Type": "application/json" };
 }
@@ -114,6 +121,60 @@ type ApprovedStatus =
   | { kind: "ok"; poolSize: number; alreadyApproved: boolean }
   | { kind: "error"; message: string };
 
+function PuzzleGrid({ puzzle }: { puzzle: StoredPuzzle }) {
+  const cellPx = 40;
+  return (
+    <div
+      className="relative grid shrink-0 border-2 border-foreground/60"
+      style={{
+        width: puzzle.cols * cellPx,
+        height: puzzle.rows * cellPx,
+        gridTemplateColumns: `repeat(${puzzle.cols}, 1fr)`,
+        gridTemplateRows: `repeat(${puzzle.rows}, 1fr)`,
+      }}
+    >
+      {puzzle.solution.map((row, r) =>
+        row.map((letter, c) => {
+          const isBlack = puzzle.black[r][c];
+          const number = puzzle.numbers[r][c];
+          if (isBlack) {
+            return (
+              <div
+                key={`${r},${c}`}
+                className="border-r border-b border-foreground/60"
+                style={{
+                  backgroundColor: "#3f3f46",
+                  borderRightWidth: c === puzzle.cols - 1 ? 0 : undefined,
+                  borderBottomWidth: r === puzzle.rows - 1 ? 0 : undefined,
+                }}
+              />
+            );
+          }
+          return (
+            <div
+              key={`${r},${c}`}
+              className="relative bg-card border-r border-b border-foreground/40 flex items-center justify-center"
+              style={{
+                borderRightWidth: c === puzzle.cols - 1 ? 0 : undefined,
+                borderBottomWidth: r === puzzle.rows - 1 ? 0 : undefined,
+              }}
+            >
+              {number !== null && (
+                <span className="pointer-events-none absolute left-0.5 top-0 font-mono text-[0.55rem] leading-tight text-muted">
+                  {number}
+                </span>
+              )}
+              <span className="font-mono font-bold text-foreground text-lg">
+                {letter}
+              </span>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 function PuzzlePreview({
   puzzle,
   deletedKeys,
@@ -131,57 +192,9 @@ function PuzzlePreview({
   onDeleteClue: (answer: string, clue: string) => void;
   onReclue: (direction: "across" | "down", number: number) => void;
 }) {
-  const cellPx = 40;
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-      <div
-        className="relative grid shrink-0 border-2 border-foreground/60"
-        style={{
-          width: puzzle.cols * cellPx,
-          height: puzzle.rows * cellPx,
-          gridTemplateColumns: `repeat(${puzzle.cols}, 1fr)`,
-          gridTemplateRows: `repeat(${puzzle.rows}, 1fr)`,
-        }}
-      >
-        {puzzle.solution.map((row, r) =>
-          row.map((letter, c) => {
-            const isBlack = puzzle.black[r][c];
-            const number = puzzle.numbers[r][c];
-            if (isBlack) {
-              return (
-                <div
-                  key={`${r},${c}`}
-                  className="border-r border-b border-foreground/60"
-                  style={{
-                    backgroundColor: "#3f3f46",
-                    borderRightWidth: c === puzzle.cols - 1 ? 0 : undefined,
-                    borderBottomWidth: r === puzzle.rows - 1 ? 0 : undefined,
-                  }}
-                />
-              );
-            }
-            return (
-              <div
-                key={`${r},${c}`}
-                className="relative bg-card border-r border-b border-foreground/40 flex items-center justify-center"
-                style={{
-                  borderRightWidth: c === puzzle.cols - 1 ? 0 : undefined,
-                  borderBottomWidth: r === puzzle.rows - 1 ? 0 : undefined,
-                }}
-              >
-                {number !== null && (
-                  <span className="pointer-events-none absolute left-0.5 top-0 font-mono text-[0.55rem] leading-tight text-muted">
-                    {number}
-                  </span>
-                )}
-                <span className="font-mono font-bold text-foreground text-lg">
-                  {letter}
-                </span>
-              </div>
-            );
-          })
-        )}
-      </div>
+      <PuzzleGrid puzzle={puzzle} />
 
       <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:flex-1">
         <ClueColumn
@@ -726,11 +739,16 @@ function FlaggedCard({
 
 // ─── Main review view ─────────────────────────────────────────────────────────
 
+type ReviewTab = "review" | "pool";
+
 function ReviewView({ password }: { password: string }) {
+  const [tab, setTab] = useState<ReviewTab>("review");
   const [flagged, setFlagged] = useState<FlaggedRecord[]>([]);
   const [deletedLog, setDeletedLog] = useState<DeletedClueEntry[]>([]);
+  const [crosswordApproved, setCrosswordApproved] = useState<StoredPuzzle[]>([]);
   const [crypticFlagged, setCrypticFlagged] = useState<CrypticFlaggedEntry[]>([]);
   const [crypticGood, setCrypticGood] = useState<string[]>([]);
+  const [crypticGoodEntries, setCrypticGoodEntries] = useState<CrypticGoodEntry[]>([]);
   const [crypticDeletedLog, setCrypticDeletedLog] = useState<CrypticDeletedEntry[]>([]);
   const [crypticHandled, setCrypticHandled] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -751,8 +769,10 @@ function ReviewView({ password }: { password: string }) {
       .then((data) => {
         setFlagged(data.flagged ?? []);
         setDeletedLog(data.deletedLog ?? []);
+        setCrosswordApproved(data.crosswordApproved ?? []);
         setCrypticFlagged(data.crypticFlagged ?? []);
         setCrypticGood(data.crypticGood ?? []);
+        setCrypticGoodEntries(data.crypticGoodEntries ?? []);
         setCrypticDeletedLog(data.crypticDeletedLog ?? []);
         setLoading(false);
       });
@@ -846,6 +866,29 @@ function ReviewView({ password }: { password: string }) {
     );
   };
 
+  const handleRemoveApproved = async (puzzleId: string) => {
+    const res = await fetch("/api/cluereview/pool-remove", {
+      method: "POST",
+      headers: authHeaders(pwRef.current),
+      body: JSON.stringify({ type: "crossword", puzzleId }),
+    });
+    if (!res.ok) return false;
+    setCrosswordApproved((prev) => prev.filter((p) => p.id !== puzzleId));
+    return true;
+  };
+
+  const handleRemoveGoodClue = async (key: string) => {
+    const res = await fetch("/api/cluereview/pool-remove", {
+      method: "POST",
+      headers: authHeaders(pwRef.current),
+      body: JSON.stringify({ type: "cryptic", key }),
+    });
+    if (!res.ok) return false;
+    setCrypticGood((prev) => prev.filter((k) => k !== key));
+    setCrypticGoodEntries((prev) => prev.filter((e) => e.key !== key));
+    return true;
+  };
+
   const visible = flagged.filter((r) => !dismissedIds.has(r.puzzleId));
 
   return (
@@ -857,6 +900,23 @@ function ReviewView({ password }: { password: string }) {
           : `${visible.length} flagged puzzle${visible.length !== 1 ? "s" : ""} pending review.`
       }
     >
+      <TabBar
+        tab={tab}
+        onChange={setTab}
+        reviewCount={visible.length + crypticFlagged.filter((f) => !crypticHandled.has(f.key)).length}
+        poolCount={crosswordApproved.length + crypticGoodEntries.length}
+      />
+
+      {tab === "pool" ? (
+        <AcceptedPoolView
+          loading={loading}
+          crosswordApproved={crosswordApproved}
+          crypticGoodEntries={crypticGoodEntries}
+          onRemoveCrossword={handleRemoveApproved}
+          onRemoveCryptic={handleRemoveGoodClue}
+        />
+      ) : (
+        <>
       <GeneratorSection
         password={password}
         onClueDeleted={(entry) =>
@@ -1033,7 +1093,297 @@ function ReviewView({ password }: { password: string }) {
           </div>
         )}
       </section>
+        </>
+      )}
     </PageContainer>
+  );
+}
+
+// ─── Tab bar ──────────────────────────────────────────────────────────────────
+
+function TabBar({
+  tab,
+  onChange,
+  reviewCount,
+  poolCount,
+}: {
+  tab: ReviewTab;
+  onChange: (t: ReviewTab) => void;
+  reviewCount: number;
+  poolCount: number;
+}) {
+  const tabs: { id: ReviewTab; label: string; count: number }[] = [
+    { id: "review", label: "Review queue", count: reviewCount },
+    { id: "pool", label: "Accepted pool", count: poolCount },
+  ];
+  return (
+    <div className="flex gap-1 border-b border-border mb-8">
+      {tabs.map((t) => {
+        const active = tab === t.id;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onChange(t.id)}
+            className={`relative -mb-px px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              active
+                ? "border-accent text-foreground"
+                : "border-transparent text-muted hover:text-foreground"
+            }`}
+          >
+            {t.label}
+            <span
+              className={`ml-2 font-mono text-xs ${
+                active ? "text-accent" : "text-muted"
+              }`}
+            >
+              {t.count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Inline two-step remove confirm ─────────────────────────────────────────────
+
+function ConfirmRemove({
+  onConfirm,
+  prompt = "Remove?",
+}: {
+  onConfirm: () => Promise<boolean>;
+  prompt?: string;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  if (confirming) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <span className="text-xs text-muted">{prompt}</span>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            const ok = await onConfirm();
+            // On success the row/card unmounts; on failure re-enable so the
+            // mod can retry or cancel.
+            if (!ok) {
+              setBusy(false);
+              setConfirming(false);
+            }
+          }}
+          className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400/60 rounded px-2 py-0.5 transition-colors disabled:opacity-50"
+        >
+          {busy ? "…" : "Yes, remove"}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setConfirming(false)}
+          className="text-xs text-muted hover:text-foreground border border-border rounded px-2 py-0.5 hover:border-accent/40 transition-colors disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setConfirming(true)}
+      className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400/60 rounded px-2 py-0.5 transition-colors"
+    >
+      Remove from pool
+    </button>
+  );
+}
+
+// ─── Accepted-pool view ─────────────────────────────────────────────────────────
+
+function AcceptedPoolView({
+  loading,
+  crosswordApproved,
+  crypticGoodEntries,
+  onRemoveCrossword,
+  onRemoveCryptic,
+}: {
+  loading: boolean;
+  crosswordApproved: StoredPuzzle[];
+  crypticGoodEntries: CrypticGoodEntry[];
+  onRemoveCrossword: (puzzleId: string) => Promise<boolean>;
+  onRemoveCryptic: (key: string) => Promise<boolean>;
+}) {
+  if (loading) return <p className="text-muted text-sm">Loading…</p>;
+  return (
+    <>
+      {/* ── Crossword — approved pool ── */}
+      <section>
+        <div className="flex items-baseline gap-3 mb-3">
+          <h2 className="text-lg font-semibold">Crossword — Approved Pool</h2>
+          <span className="font-mono text-xs text-muted">
+            {crosswordApproved.length} puzzle
+            {crosswordApproved.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+        <div className="border border-emerald-500/30 bg-emerald-500/5 rounded p-4 text-sm text-emerald-200/80 mb-5 leading-relaxed">
+          Puzzles in{" "}
+          <code className="font-mono text-emerald-300/90">
+            data/crossword-approved.json
+          </code>
+          . Once this file is non-empty the daily crossword draws from it
+          instead of the bundled pool.
+        </div>
+        {crosswordApproved.length === 0 ? (
+          <p className="text-muted text-sm">
+            No approved puzzles yet — generate and approve one in the review
+            queue.
+          </p>
+        ) : (
+          <div className="space-y-6">
+            {crosswordApproved.map((puzzle) => (
+              <ApprovedPuzzleCard
+                key={puzzle.id}
+                puzzle={puzzle}
+                onRemove={() => onRemoveCrossword(puzzle.id)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── Cryptic — good pool ── */}
+      <section className="mt-14">
+        <div className="flex items-baseline gap-3 mb-3">
+          <h2 className="text-lg font-semibold">Cryptic — Good Pool</h2>
+          <span className="font-mono text-xs text-muted">
+            {crypticGoodEntries.length} clue
+            {crypticGoodEntries.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+        <div className="border border-emerald-500/30 bg-emerald-500/5 rounded p-4 text-sm text-emerald-200/80 mb-5 leading-relaxed">
+          Player-upvoted clues tracked in{" "}
+          <code className="font-mono text-emerald-300/90">
+            data/cryptic-good.json
+          </code>
+          , resolved against the live clue dataset.
+        </div>
+        {crypticGoodEntries.length === 0 ? (
+          <p className="text-muted text-sm">No clues upvoted yet.</p>
+        ) : (
+          <div className="border border-border rounded overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-card">
+                  <th className="text-left px-4 py-2.5 text-muted font-medium text-xs w-32">
+                    Answer
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-muted font-medium text-xs w-16">
+                    ({"#"})
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-muted font-medium text-xs">
+                    Clue
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-muted font-medium text-xs">
+                    Wordplay
+                  </th>
+                  <th className="px-4 py-2.5 text-xs w-44" />
+                </tr>
+              </thead>
+              <tbody>
+                {crypticGoodEntries.map((entry) => (
+                  <tr
+                    key={entry.key}
+                    className="border-b border-border last:border-0 align-top"
+                  >
+                    <td className="px-4 py-2.5 font-mono text-accent">
+                      {entry.key}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-muted">
+                      {entry.pattern}
+                    </td>
+                    <td className="px-4 py-2.5">{entry.clue}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-muted">
+                      {entry.wordplay || "—"}
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <ConfirmRemove
+                        onConfirm={() => onRemoveCryptic(entry.key)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+function ApprovedPuzzleCard({
+  puzzle,
+  onRemove,
+}: {
+  puzzle: StoredPuzzle;
+  onRemove: () => Promise<boolean>;
+}) {
+  return (
+    <div className="border border-border rounded p-4">
+      <div className="flex flex-wrap items-baseline gap-3 mb-3 text-xs text-muted">
+        <span className="font-mono">{puzzle.id}</span>
+        <span className="border border-border rounded px-2 py-0.5">
+          {puzzle.shape}
+        </span>
+        <span>
+          {puzzle.entries.across.length + puzzle.entries.down.length} clues
+        </span>
+        {typeof puzzle.upvotes === "number" && (
+          <span className="text-emerald-300/80">
+            ▲ {puzzle.upvotes} upvote{puzzle.upvotes !== 1 ? "s" : ""}
+          </span>
+        )}
+        <span className="ml-auto">
+          <ConfirmRemove onConfirm={onRemove} prompt="Remove this puzzle?" />
+        </span>
+      </div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <PuzzleGrid puzzle={puzzle} />
+        <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:flex-1">
+          <ReadOnlyClueColumn title="Across" entries={puzzle.entries.across} />
+          <ReadOnlyClueColumn title="Down" entries={puzzle.entries.down} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReadOnlyClueColumn({
+  title,
+  entries,
+}: {
+  title: string;
+  entries: Puzzle["entries"]["across"];
+}) {
+  return (
+    <div>
+      <h4 className="font-mono text-xs uppercase tracking-wider text-muted mb-1.5">
+        {title}
+      </h4>
+      <ol className="space-y-1">
+        {entries.map((e) => (
+          <li key={`${e.direction}-${e.number}`} className="leading-snug">
+            <span className="font-mono text-xs text-muted">{e.number}.</span>{" "}
+            <span className="text-foreground">{e.clue}</span>{" "}
+            <span className="font-mono text-xs text-accent">({e.answer})</span>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
